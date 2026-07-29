@@ -763,3 +763,108 @@ tbody tr:last-child td{border-bottom:0}
   box-shadow:0 16px 32px rgba(13,106,66,.28);
   filter:saturate(1.08);
 }
+
+
+/* Romaneio de saída */
+.romaneio-status{display:grid;gap:6px;justify-items:start;min-width:150px}
+.romaneio-status small{font-size:9px;font-weight:800;color:#758196;letter-spacing:.03em}
+.romaneio-actions{min-width:280px;align-items:center}
+.mini-btn.romaneio-print{color:#1d5d91;border-color:#cfe2f2;background:#f2f8fd}
+.mini-btn.romaneio-upload{color:#8b5a00;border-color:#efd9a9;background:#fff8e8}
+.mini-btn.romaneio-view{color:#10734f;border-color:#c9eadc;background:#eefaf5}
+.exits-table td:last-child{min-width:300px}
+
+@media(max-width:700px){
+  .romaneio-status{justify-items:end;min-width:0}
+  .romaneio-actions{min-width:0;justify-content:flex-end}
+  .romaneio-actions .mini-btn{flex:1 1 120px}
+  .exits-table td:last-child{min-width:0}
+}
+
+
+/* Assinatura digital no tablet — Projeto Zero Papel */
+.mini-btn.romaneio-sign{
+  color:#fff;
+  border-color:#0d6f4d;
+  background:linear-gradient(135deg,#159267,#0e6f4d);
+  box-shadow:0 7px 16px rgba(18,131,91,.18);
+}
+.signature-modal-card{width:min(920px,calc(100vw - 24px));max-height:94vh;overflow:auto}
+.signature-form{display:grid;gap:18px}
+.signature-summary{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  padding:15px;
+  border:1px solid #dde5ee;
+  border-radius:16px;
+  background:#f7f9fc;
+}
+.signature-summary>div{display:grid;gap:4px;padding:10px;border-radius:11px;background:#fff}
+.signature-summary span{font-size:9px;font-weight:900;color:#8490a2;text-transform:uppercase;letter-spacing:.08em}
+.signature-summary strong{font-size:12px;line-height:1.45;color:#1b2a40}
+.signature-identification{display:grid;grid-template-columns:1.5fr 1fr;gap:13px}
+.signature-label{font-size:13px;color:#213047}
+.signature-pad-shell{
+  position:relative;
+  width:100%;
+  height:300px;
+  overflow:hidden;
+  border:2px dashed #aeb9c8;
+  border-radius:18px;
+  background:
+    linear-gradient(#fff,#fff) padding-box,
+    repeating-linear-gradient(0deg,transparent,transparent 39px,#eef2f6 40px) border-box;
+  box-shadow:inset 0 2px 14px rgba(10,22,38,.035);
+  touch-action:none;
+}
+.signature-canvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none}
+.signature-placeholder{
+  position:absolute;inset:0;
+  display:grid;place-items:center;
+  pointer-events:none;
+  color:#a6b0be;font-size:24px;font-weight:800;letter-spacing:-.03em;
+}
+.signature-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.signature-toolbar span{font-size:10px;color:#758196;line-height:1.5;text-align:right}
+.signature-consent{
+  grid-template-columns:auto 1fr;
+  align-items:start;
+  gap:11px;
+  padding:14px;
+  border:1px solid #cce7dc;
+  border-radius:14px;
+  background:#f0faf6;
+  color:#245440;
+  line-height:1.5;
+}
+.signature-consent input{width:20px;min-height:20px;margin:1px 0 0;accent-color:#12835b}
+
+@media(max-width:720px){
+  .signature-modal-card{width:100%;max-height:100vh;border-radius:22px 22px 0 0;margin-top:auto}
+  .signature-summary,.signature-identification{grid-template-columns:1fr}
+  .signature-pad-shell{height:260px}
+  .signature-toolbar{align-items:stretch;flex-direction:column}
+  .signature-toolbar span{text-align:left}
+  .signature-form .form-actions{position:sticky;bottom:0;margin:0 -2px -2px;padding:12px 0 2px;background:linear-gradient(transparent,#fff 25%)}
+}
+
+
+/* Romaneio digital definitivo */
+.mini-btn.romaneio-locked,
+.mini-btn.romaneio-locked:disabled{
+  color:#0f6f4b;
+  background:#e8f7f0;
+  border-color:#bde7d4;
+  opacity:1;
+  cursor:not-allowed;
+  transform:none;
+}
+
+/* Romaneio virtual definitivo */
+.romaneio-actions{flex-wrap:wrap;min-width:220px}
+.romaneio-actions .romaneio-sign{color:#087653;border-color:#a9dfca;background:#effaf5}
+.romaneio-actions .romaneio-view{color:#087653;border-color:#a9dfca;background:#effaf5}
+.romaneio-actions .romaneio-print{color:#32445e;background:#f7f9fc}
+.signature-canvas{touch-action:none;user-select:none;-webkit-user-select:none}
+.signature-pad-shell{overscroll-behavior:contain}

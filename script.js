@@ -113,6 +113,11 @@
     $("#exportHistoryButton").addEventListener("click", () => exportCSV("historico.csv", state.movements));
     $("#exportArchiveButton").addEventListener("click", exportAuditExcelPremium);
     $("#printAuditButton").addEventListener("click", printAuditReport);
+    $("#signatureForm").addEventListener("submit", saveDigitalSignature);
+    $("#clearSignatureButton").addEventListener("click", clearDigitalSignature);
+    window.addEventListener("resize", () => {
+      if ($("#signatureModal")?.classList.contains("open")) resizeSignatureCanvas();
+    });
   }
 
   function setDefaultDates() {
@@ -387,10 +392,32 @@
 
   function renderExits() {
     const rows = filteredMovements("saida");
-    $("#exitsTableBody").innerHTML = rows.length ? rows.map(m => `
-      <tr><td>${fmtDate(m.data_movimento)}</td><td><strong>${esc(m.itens?.codigo)}</strong><br>${esc(m.itens?.descricao)}</td><td><strong>-${m.quantidade}</strong></td>
-      <td>${esc(m.numero_os || "Sem OS")}<br><small>${esc(m.chassi || m.placa || "")}</small></td><td>${esc(m.finalidade || "—")}</td>
-      <td>${esc(m.solicitante || "—")}</td><td>${attachmentButton(m.id)}</td></tr>`).join("") : `<tr><td colspan="7" class="empty-state">Nenhuma saída encontrada.</td></tr>`;
+    $("#exitsTableBody").innerHTML = rows.length ? rows.map(m => {
+      const signed = signedRomaneioAttachment(m.id);
+      const status = signed
+        ? `<span class="badge success">Romaneio assinado</span>`
+        : `<span class="badge warning">Aguardando assinatura</span>`;
+
+      return `
+        <tr>
+          <td data-label="Data">${fmtDate(m.data_movimento)}</td>
+          <td data-label="Item"><strong>${esc(m.itens?.codigo)}</strong><br>${esc(m.itens?.descricao)}</td>
+          <td data-label="Quantidade"><strong>-${m.quantidade}</strong></td>
+          <td data-label="OS / Chassi">${esc(m.numero_os || "Sem OS")}<br><small>${esc(m.chassi || m.placa || "")}</small></td>
+          <td data-label="Finalidade">${esc(m.finalidade || "—")}</td>
+          <td data-label="Solicitante">${esc(m.solicitante || "—")}</td>
+          <td data-label="Romaneio"><div class="romaneio-status">${status}<small>${esc(romaneioNumber(m))}</small></div></td>
+          <td data-label="Ações">
+            <div class="table-actions romaneio-actions">
+              <button class="mini-btn romaneio-sign" onclick="window.app.openDigitalSignature('${m.id}')">${signed ? "Assinar novamente" : "Assinar no tablet"}</button>
+              <button class="mini-btn romaneio-print" onclick="window.app.printRomaneio('${m.id}')">Imprimir</button>
+              <button class="mini-btn romaneio-upload" onclick="window.app.selectSignedRomaneio('${m.id}')">${signed ? "Substituir arquivo" : "Anexar arquivo"}</button>
+              ${signed ? `<button class="mini-btn romaneio-view" onclick="window.app.openDocument('${signed.id}')">Ver assinado</button>` : ""}
+              ${attachmentButton(m.id, true)}
+            </div>
+          </td>
+        </tr>`;
+    }).join("") : `<tr><td colspan="8" class="empty-state">Nenhuma saída encontrada.</td></tr>`;
   }
 
   function renderHistory() {
@@ -604,7 +631,7 @@
     setLoading(button,true,"Registrando...");
 
     try {
-      const { data: movementId, error } = await sb.rpc("registrar_saida", {
+      const { data: result, error } = await sb.rpc("registrar_saida", {
         p_item_id:data.get("item_id"), p_quantidade:Number(data.get("quantidade")),
         p_data_movimento:data.get("data_movimento"), p_finalidade:data.get("finalidade"),
         p_numero_os:data.get("numero_os"), p_chassi:data.get("chassi"),
@@ -613,10 +640,23 @@
         p_observacoes:data.get("observacoes")
       });
       if (error) throw error;
+
+      const movementId = typeof result === "object" && result !== null
+        ? result.movimentacao_id || result.id
+        : result;
+
+      if (!movementId) {
+        throw new Error("A saída foi processada, mas o identificador da movimentação não foi retornado.");
+      }
+
       await uploadFiles(files, movementId, "saida");
-      event.target.reset(); setDefaultDates(); updateExitBalance(); closeModals();
-      toast("Saída registrada e saldo atualizado.");
+      event.target.reset();
+      setDefaultDates();
+      updateExitBalance();
+      closeModals();
       await loadAll();
+      toast("Saída registrada. O romaneio foi preparado para impressão e assinatura.");
+      printRomaneio(movementId);
     } catch (error) {
       toast(translateError(error.message),"error","Saída não registrada");
     } finally { setLoading(button,false); }
@@ -722,9 +762,492 @@
     openModal("itemDetailModal");
   }
 
-  function attachmentButton(movementId) {
+  function attachmentButton(movementId, compact = false) {
     const count = state.attachments.filter(a => a.movimentacao_id === movementId).length;
-    return count ? `<button class="mini-btn" onclick="window.app.showMovementDocuments('${movementId}')">${count} arquivo(s)</button>` : `<span class="badge neutral">Sem anexo</span>`;
+    if (!count) return compact ? "" : `<span class="badge neutral">Sem anexo</span>`;
+    return `<button class="mini-btn" onclick="window.app.showMovementDocuments('${movementId}')">${compact ? `Outros (${count})` : `${count} arquivo(s)`}</button>`;
+  }
+
+  function signedRomaneioAttachment(movementId) {
+    return state.attachments.find(a =>
+      a.movimentacao_id === movementId &&
+      normalize(a.nome_arquivo).startsWith("romaneio_assinado_")
+    ) || null;
+  }
+
+  function romaneioNumber(movement) {
+    const year = movement?.data_movimento
+      ? String(movement.data_movimento).slice(0, 4)
+      : String(new Date().getFullYear());
+    const idPart = String(movement?.id || "SEMID").replace(/[^a-zA-Z0-9]/g, "").slice(-8).toUpperCase();
+    return `ROM-${year}-${idPart}`;
+  }
+
+  let signatureContext = null;
+  let signatureDrawing = false;
+  let signatureHasInk = false;
+  let signatureLastPoint = null;
+
+  function openDigitalSignature(movementId) {
+    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
+    if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
+
+    $("#signatureMovementId").value = movementId;
+    $("#signatureReceiverName").value = movement.solicitante || "";
+    $("#signatureReceiverDocument").value = "";
+    $("#signatureConsent").checked = false;
+    $("#signatureRomaneioSummary").innerHTML = `
+      <div><span>Romaneio</span><strong>${esc(romaneioNumber(movement))}</strong></div>
+      <div><span>Item</span><strong>${esc(movement.itens?.codigo || "—")} — ${esc(movement.itens?.descricao || "—")}</strong></div>
+      <div><span>Quantidade</span><strong>${Number(movement.quantidade || 0)} unidade(s)</strong></div>
+      <div><span>OS / Finalidade</span><strong>${esc(movement.numero_os || "Sem OS")} • ${esc(movement.finalidade || "—")}</strong></div>`;
+
+    openModal("signatureModal");
+    requestAnimationFrame(() => {
+      resizeSignatureCanvas();
+      configureSignatureCanvas();
+      clearDigitalSignature();
+      $("#signatureReceiverName").focus();
+    });
+  }
+
+  function resizeSignatureCanvas() {
+    const canvas = $("#signatureCanvas");
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const previous = signatureHasInk ? canvas.toDataURL("image/png") : null;
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+
+    signatureContext = canvas.getContext("2d");
+    signatureContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+    signatureContext.lineCap = "round";
+    signatureContext.lineJoin = "round";
+    signatureContext.strokeStyle = "#10213a";
+    signatureContext.lineWidth = 2.6;
+
+    if (previous) {
+      const image = new Image();
+      image.onload = () => signatureContext.drawImage(image, 0, 0, rect.width, rect.height);
+      image.src = previous;
+    }
+  }
+
+  function configureSignatureCanvas() {
+    const canvas = $("#signatureCanvas");
+    if (!canvas || canvas.dataset.signatureReady === "true") return;
+    canvas.dataset.signatureReady = "true";
+
+    const pointFromEvent = event => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+
+    canvas.addEventListener("pointerdown", event => {
+      event.preventDefault();
+      canvas.setPointerCapture?.(event.pointerId);
+      signatureDrawing = true;
+      signatureLastPoint = pointFromEvent(event);
+      signatureHasInk = true;
+      $("#signaturePlaceholder").classList.add("hidden");
+      signatureContext.beginPath();
+      signatureContext.moveTo(signatureLastPoint.x, signatureLastPoint.y);
+    });
+
+    canvas.addEventListener("pointermove", event => {
+      if (!signatureDrawing || !signatureContext) return;
+      event.preventDefault();
+      const point = pointFromEvent(event);
+      signatureContext.lineTo(point.x, point.y);
+      signatureContext.stroke();
+      signatureLastPoint = point;
+    });
+
+    const finish = event => {
+      if (!signatureDrawing) return;
+      event?.preventDefault();
+      signatureDrawing = false;
+      signatureLastPoint = null;
+      signatureContext?.closePath();
+    };
+
+    canvas.addEventListener("pointerup", finish);
+    canvas.addEventListener("pointercancel", finish);
+    canvas.addEventListener("pointerleave", finish);
+  }
+
+  function clearDigitalSignature() {
+    const canvas = $("#signatureCanvas");
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!signatureContext) resizeSignatureCanvas();
+    signatureContext?.clearRect(0, 0, rect.width, rect.height);
+    signatureHasInk = false;
+    signatureDrawing = false;
+    signatureLastPoint = null;
+    $("#signaturePlaceholder")?.classList.remove("hidden");
+  }
+
+  function xmlEscape(value) {
+    return String(value ?? "").replace(/[<>&"']/g, char => ({
+      "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;"
+    })[char]);
+  }
+
+  function wrapSvgText(value, maxChars = 55) {
+    const words = String(value || "—").split(/\s+/);
+    const lines = [];
+    let line = "";
+    words.forEach(word => {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > maxChars && line) {
+        lines.push(line);
+        line = word;
+      } else line = next;
+    });
+    if (line) lines.push(line);
+    return lines.slice(0, 3);
+  }
+
+  function buildSignedRomaneioSvg(movement, receiverName, receiverDocument, signatureDataUrl) {
+    const numero = romaneioNumber(movement);
+    const filial = FILIAIS.find(f => f.localidade === movement.itens?.filial);
+    const signedAt = new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short", timeStyle: "medium"
+    }).format(new Date());
+    const descriptionLines = wrapSvgText(movement.itens?.descricao, 62);
+    const observationLines = wrapSvgText(movement.observacoes || "Sem observações", 76);
+    const textLines = (lines, x, y, gap=22) => lines.map((line, index) =>
+      `<text x="${x}" y="${y + index * gap}" class="value">${xmlEscape(line)}</text>`
+    ).join("");
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1240" height="1754" viewBox="0 0 1240 1754">
+  <style>
+    .title{font:700 31px Arial,sans-serif;fill:#fff}.subtitle{font:16px Arial,sans-serif;fill:#d6e0ec}
+    .section{font:700 17px Arial,sans-serif;fill:#fff;letter-spacing:1px}.label{font:700 15px Arial,sans-serif;fill:#66758a}
+    .value{font:18px Arial,sans-serif;fill:#142033}.strong{font:700 20px Arial,sans-serif;fill:#142033}
+    .small{font:14px Arial,sans-serif;fill:#66758a}.declaration{font:16px Arial,sans-serif;fill:#354258}
+  </style>
+  <rect width="1240" height="1754" fill="#f4f6f9"/>
+  <rect x="52" y="45" width="1136" height="1662" rx="12" fill="#fff" stroke="#cdd6e2" stroke-width="2"/>
+  <rect x="52" y="45" width="1136" height="168" rx="12" fill="#0b1a2d"/>
+  <rect x="52" y="195" width="1136" height="18" fill="#d71928"/>
+  <rect x="82" y="78" width="90" height="90" rx="22" fill="#d71928"/>
+  <text x="127" y="136" text-anchor="middle" class="title" font-size="25">LD</text>
+  <text x="198" y="112" class="title">ROMANEIO DIGITAL DE ENTREGA</text>
+  <text x="198" y="148" class="subtitle">Controle de Itens Livres de Débito • Grupo Monaco • Projeto Zero Papel</text>
+  <text x="1110" y="105" text-anchor="end" class="subtitle">${xmlEscape(numero)}</text>
+  <text x="1110" y="143" text-anchor="end" class="subtitle">Saída: ${xmlEscape(fmtDate(movement.data_movimento))}</text>
+
+  <rect x="82" y="252" width="1076" height="44" rx="6" fill="#132b48"/><text x="102" y="281" class="section">IDENTIFICAÇÃO DA OPERAÇÃO</text>
+  <text x="102" y="340" class="label">FILIAL</text><text x="102" y="370" class="strong">${xmlEscape(movement.itens?.filial || "—")}</text>
+  <text x="470" y="340" class="label">CNPJ</text><text x="470" y="370" class="strong">${xmlEscape(filial?.cnpj || "—")}</text>
+  <text x="820" y="340" class="label">DATA/HORA DA ASSINATURA</text><text x="820" y="370" class="strong">${xmlEscape(signedAt)}</text>
+
+  <rect x="82" y="416" width="1076" height="44" rx="6" fill="#132b48"/><text x="102" y="445" class="section">ITEM RETIRADO</text>
+  <text x="102" y="505" class="label">CÓDIGO</text><text x="102" y="535" class="strong">${xmlEscape(movement.itens?.codigo || "—")}</text>
+  <text x="370" y="505" class="label">QUANTIDADE</text><text x="370" y="535" class="strong">${Number(movement.quantidade || 0)} unidade(s)</text>
+  <text x="720" y="505" class="label">LOCALIZAÇÃO</text><text x="720" y="535" class="strong">${xmlEscape(movement.itens?.localizacao || "—")}</text>
+  <text x="102" y="590" class="label">DESCRIÇÃO</text>${textLines(descriptionLines,102,620)}
+
+  <rect x="82" y="710" width="1076" height="44" rx="6" fill="#132b48"/><text x="102" y="739" class="section">DADOS DA RETIRADA</text>
+  <text x="102" y="800" class="label">OS</text><text x="102" y="830" class="value">${xmlEscape(movement.numero_os || "Sem OS")}</text>
+  <text x="380" y="800" class="label">CHASSI</text><text x="380" y="830" class="value">${xmlEscape(movement.chassi || "—")}</text>
+  <text x="810" y="800" class="label">PLACA</text><text x="810" y="830" class="value">${xmlEscape(movement.placa || "—")}</text>
+  <text x="102" y="885" class="label">CLIENTE</text><text x="102" y="915" class="value">${xmlEscape(movement.cliente || "—")}</text>
+  <text x="600" y="885" class="label">FINALIDADE</text><text x="600" y="915" class="value">${xmlEscape(movement.finalidade || "—")}</text>
+  <text x="102" y="970" class="label">SOLICITANTE</text><text x="102" y="1000" class="value">${xmlEscape(movement.solicitante || "—")}</text>
+  <text x="600" y="970" class="label">AUTORIZADO POR</text><text x="600" y="1000" class="value">${xmlEscape(movement.autorizado_por || "—")}</text>
+  <text x="102" y="1055" class="label">OBSERVAÇÕES</text>${textLines(observationLines,102,1085)}
+
+  <rect x="82" y="1185" width="1076" height="44" rx="6" fill="#12835b"/><text x="102" y="1214" class="section">RECEBIMENTO E ASSINATURA DIGITAL</text>
+  <text x="102" y="1275" class="label">NOME DO RECEBEDOR</text><text x="102" y="1307" class="strong">${xmlEscape(receiverName)}</text>
+  <text x="700" y="1275" class="label">CPF / MATRÍCULA</text><text x="700" y="1307" class="strong">${xmlEscape(receiverDocument)}</text>
+  <rect x="102" y="1345" width="650" height="205" rx="8" fill="#fff" stroke="#aeb9c8" stroke-width="2"/>
+  <image x="122" y="1365" width="610" height="165" preserveAspectRatio="xMidYMid meet" xlink:href="${signatureDataUrl}"/>
+  <text x="780" y="1400" class="label">RESPONSÁVEL PELA ENTREGA</text><text x="780" y="1432" class="value">${xmlEscape(state.profile?.nome || "—")}</text>
+  <text x="780" y="1490" class="label">VALIDAÇÃO</text><text x="780" y="1522" class="value">Assinatura capturada digitalmente</text>
+
+  <text x="102" y="1605" class="declaration">Declaro que recebi o item acima relacionado nas condições informadas e reconheço esta assinatura digital</text>
+  <text x="102" y="1632" class="declaration">como comprovante da retirada, utilização, guarda e devolução quando aplicável.</text>
+  <line x1="82" y1="1665" x2="1158" y2="1665" stroke="#d7dee7"/>
+  <text x="102" y="1692" class="small">Documento eletrônico vinculado à movimentação ${xmlEscape(String(movement.id))}</text>
+  <text x="1138" y="1692" text-anchor="end" class="small">${xmlEscape(numero)}</text>
+</svg>`;
+  }
+
+  async function svgToPngFile(svgContent, filename) {
+    return new Promise((resolve, reject) => {
+      const svgBlob = new Blob([svgContent], {
+        type: "image/svg+xml;charset=utf-8"
+      });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      const image = new Image();
+
+      image.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 1240;
+          canvas.height = 1754;
+
+          const context = canvas.getContext("2d", { alpha: false });
+          if (!context) throw new Error("Não foi possível preparar o romaneio digital.");
+
+          context.fillStyle = "#FFFFFF";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+          canvas.toBlob(blob => {
+            URL.revokeObjectURL(svgUrl);
+            if (!blob) {
+              reject(new Error("Não foi possível converter o romaneio para PNG."));
+              return;
+            }
+
+            resolve(new File([blob], filename, {
+              type: "image/png",
+              lastModified: Date.now()
+            }));
+          }, "image/png", 1);
+        } catch (error) {
+          URL.revokeObjectURL(svgUrl);
+          reject(error);
+        }
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(svgUrl);
+        reject(new Error("Não foi possível montar a imagem do romaneio."));
+      };
+
+      image.src = svgUrl;
+    });
+  }
+
+  async function saveDigitalSignature(event) {
+    event.preventDefault();
+    const button = event.submitter;
+    const movementId = $("#signatureMovementId").value;
+    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
+    const receiverName = $("#signatureReceiverName").value.trim();
+    const receiverDocument = $("#signatureReceiverDocument").value.trim();
+
+    if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
+    if (!receiverName || !receiverDocument) return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
+    if (!signatureHasInk) return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
+    if (!$("#signatureConsent").checked) return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
+
+    setLoading(button, true, "Salvando assinatura...");
+    try {
+      const signatureDataUrl = $("#signatureCanvas").toDataURL("image/png");
+      const svg = buildSignedRomaneioSvg(movement, receiverName, receiverDocument, signatureDataUrl);
+      const file = await svgToPngFile(
+        svg,
+        `ROMANEIO_ASSINADO_${romaneioNumber(movement)}_DIGITAL.png`
+      );
+
+      const existing = signedRomaneioAttachment(movementId);
+      if (existing) await deleteAttachment(existing);
+      await uploadFiles([file], movementId, "saida");
+
+      closeModals();
+      toast("Romaneio assinado digitalmente e salvo com sucesso.");
+      await loadAll();
+    } catch (error) {
+      console.error(error);
+      toast(translateError(error.message), "error", "Assinatura não salva");
+    } finally {
+      setLoading(button, false);
+    }
+  }
+
+  function selectSignedRomaneio(movementId) {
+    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
+    if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png,.webp";
+    input.style.display = "none";
+
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      input.remove();
+      if (!file) return;
+      if (!validateFiles([file])) return;
+
+      const existing = signedRomaneioAttachment(movementId);
+      const confirmed = existing
+        ? window.confirm("Já existe um romaneio assinado para esta saída. Deseja substituí-lo?")
+        : true;
+      if (!confirmed) return;
+
+      try {
+        const safeOriginalName = file.name.replace(/^romaneio_assinado_/i, "");
+        const renamedFile = new File(
+          [file],
+          `ROMANEIO_ASSINADO_${romaneioNumber(movement)}_${safeOriginalName}`,
+          { type: file.type, lastModified: file.lastModified }
+        );
+
+        if (existing) await deleteAttachment(existing);
+        await uploadFiles([renamedFile], movementId, "saida");
+        toast("Romaneio assinado anexado e vinculado à saída.");
+        await loadAll();
+      } catch (error) {
+        toast(translateError(error.message), "error", "Romaneio não anexado");
+      }
+    }, { once: true });
+
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  async function deleteAttachment(attachment) {
+    if (!attachment) return;
+
+    const { error: storageError } = await sb.storage
+      .from(config.STORAGE_BUCKET)
+      .remove([attachment.caminho_storage]);
+
+    if (storageError) throw storageError;
+
+    const { error: dbError } = await sb
+      .from("anexos")
+      .delete()
+      .eq("id", attachment.id);
+
+    if (dbError) throw dbError;
+  }
+
+  function printRomaneio(movementId) {
+    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
+    if (!movement) return toast("Saída não encontrada para emissão.", "error", "Romaneio indisponível");
+
+    const filial = FILIAIS.find(f => f.localidade === movement.itens?.filial);
+    const generatedAt = new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short"
+    }).format(new Date());
+    const numero = romaneioNumber(movement);
+
+    const reportHtml = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>${esc(numero)} - Romaneio de Entrega</title>
+  <style>
+    @page{size:A4 portrait;margin:11mm}
+    *{box-sizing:border-box}
+    body{margin:0;color:#142033;background:#fff;font-family:Arial,sans-serif;font-size:11px}
+    .sheet{width:100%;border:1px solid #cfd7e2}
+    .header{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;background:#0b1a2d;color:#fff;border-bottom:4px solid #d71928}
+    .brand{display:flex;align-items:center;gap:12px}.logo{width:46px;height:46px;display:grid;place-items:center;border-radius:12px;background:#d71928;color:#fff;font-weight:900;font-size:15px}
+    h1{margin:0 0 5px;font-size:19px}.header p{margin:0;color:#d9e2ed;font-size:10px}.number{text-align:right}.number strong{display:block;font-size:15px}.number span{color:#d9e2ed;font-size:9px}
+    .content{padding:18px 20px}.meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}.meta div,.field{border:1px solid #dfe5ed;background:#f8fafc;padding:9px}.meta span,.field span{display:block;margin-bottom:4px;color:#758196;font-size:8px;font-weight:700;text-transform:uppercase}.meta strong,.field strong{font-size:11px}
+    .section{margin-top:14px}.section-title{padding:7px 9px;background:#eaf0f7;border-left:4px solid #132b48;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:7px}.grid.three{grid-template-columns:repeat(3,1fr)}.span-2{grid-column:span 2}.span-3{grid-column:span 3}
+    .declaration{margin-top:16px;padding:11px;border:1px solid #dfe5ed;background:#fff;font-size:9px;line-height:1.55;color:#46546a}
+    .signatures{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:48px}.signature{padding-top:8px;border-top:1px solid #263247;text-align:center}.signature strong{display:block;font-size:10px}.signature span{display:block;margin-top:4px;color:#758196;font-size:8px}
+    .receiver-data{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}.line{height:28px;border-bottom:1px solid #7d8795}.line-label{color:#758196;font-size:8px;text-transform:uppercase}
+    .footer{display:flex;justify-content:space-between;margin-top:22px;padding-top:9px;border-top:1px solid #dfe5ed;color:#758196;font-size:8px}
+    .actions{display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}.actions button{border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer}.print{background:#d71928;color:#fff}.close{background:#edf1f5;color:#263247}
+    @media print{.actions{display:none}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style>
+</head>
+<body>
+  <div class="actions"><button class="close" onclick="window.close()">Fechar</button><button class="print" onclick="window.print()">Imprimir / Salvar PDF</button></div>
+  <main class="sheet">
+    <header class="header">
+      <div class="brand"><div class="logo">LD</div><div><h1>ROMANEIO DE ENTREGA DE ITEM</h1><p>Controle de Itens Livres de Débito • Grupo Monaco</p></div></div>
+      <div class="number"><strong>${esc(numero)}</strong><span>Emitido em ${esc(generatedAt)}</span></div>
+    </header>
+    <div class="content">
+      <div class="meta">
+        <div><span>Filial</span><strong>${esc(movement.itens?.filial || "—")}</strong></div>
+        <div><span>CNPJ</span><strong>${esc(filial?.cnpj || "—")}</strong></div>
+        <div><span>Data da saída</span><strong>${esc(fmtDate(movement.data_movimento))}</strong></div>
+      </div>
+
+      <section class="section"><div class="section-title">Dados do item</div><div class="grid three">
+        <div class="field"><span>Código</span><strong>${esc(movement.itens?.codigo || "—")}</strong></div>
+        <div class="field span-2"><span>Descrição</span><strong>${esc(movement.itens?.descricao || "—")}</strong></div>
+        <div class="field"><span>Quantidade</span><strong>${esc(movement.quantidade)} unidade(s)</strong></div>
+        <div class="field"><span>Localização</span><strong>${esc(movement.itens?.localizacao || "—")}</strong></div>
+        <div class="field"><span>Finalidade</span><strong>${esc(movement.finalidade || "—")}</strong></div>
+      </div></section>
+
+      <section class="section"><div class="section-title">Dados da retirada / aplicação</div><div class="grid three">
+        <div class="field"><span>OS</span><strong>${esc(movement.numero_os || "—")}</strong></div>
+        <div class="field"><span>Placa</span><strong>${esc(movement.placa || "—")}</strong></div>
+        <div class="field"><span>Chassi</span><strong>${esc(movement.chassi || "—")}</strong></div>
+        <div class="field span-2"><span>Cliente</span><strong>${esc(movement.cliente || "—")}</strong></div>
+        <div class="field"><span>Solicitante</span><strong>${esc(movement.solicitante || "—")}</strong></div>
+        <div class="field span-2"><span>Autorizado por</span><strong>${esc(movement.autorizado_por || "—")}</strong></div>
+        <div class="field"><span>Responsável pela entrega</span><strong>${esc(state.profile?.nome || "—")}</strong></div>
+        <div class="field span-3"><span>Observações</span><strong>${esc(movement.observacoes || "Sem observações")}</strong></div>
+      </div></section>
+
+      <div class="declaration">Declaro que recebi o(s) item(ns) acima relacionado(s), nas condições informadas, ficando responsável por sua utilização, guarda e devolução quando aplicável.</div>
+
+      <div class="receiver-data">
+        <div><div class="line"></div><div class="line-label">Nome completo de quem recebeu</div></div>
+        <div><div class="line"></div><div class="line-label">CPF ou matrícula</div></div>
+      </div>
+
+      <div class="signatures">
+        <div class="signature"><strong>${esc(state.profile?.nome || "Responsável pela entrega")}</strong><span>Assinatura de quem entregou</span></div>
+        <div class="signature"><strong>Responsável pelo recebimento</strong><span>Assinatura de quem retirou</span></div>
+      </div>
+
+      <footer class="footer"><span>Sistema de Controle de Itens Livres de Débito</span><span>${esc(numero)} • Uso interno</span></footer>
+    </div>
+  </main>
+</body>
+</html>`;
+
+    const oldFrame = document.getElementById("romaneioPrintFrame");
+    if (oldFrame) oldFrame.remove();
+
+    const frame = document.createElement("iframe");
+    frame.id = "romaneioPrintFrame";
+    frame.setAttribute("title", "Romaneio para impressão");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "1px";
+    frame.style.height = "1px";
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+    frame.style.pointerEvents = "none";
+    document.body.appendChild(frame);
+
+    const frameDocument = frame.contentDocument || frame.contentWindow?.document;
+    if (!frameDocument) {
+      frame.remove();
+      return toast("Não foi possível preparar o romaneio.", "error", "Erro de impressão");
+    }
+
+    frameDocument.open();
+    frameDocument.write(reportHtml);
+    frameDocument.close();
+
+    const printFrame = () => {
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        setTimeout(() => frame.remove(), 1800);
+      } catch (error) {
+        frame.remove();
+        toast("Não foi possível abrir a impressão do romaneio.", "error", "Erro de impressão");
+      }
+    };
+
+    if (frame.contentWindow?.document?.readyState === "complete") setTimeout(printFrame, 300);
+    else frame.onload = () => setTimeout(printFrame, 300);
   }
 
   function showMovementDocuments(movementId) {
@@ -1441,6 +1964,15 @@
     return message || "Ocorreu um erro inesperado.";
   }
 
-  window.app = { showItem, editItem, deleteItem, openDocument, showMovementDocuments };
+  window.app = {
+    showItem,
+    editItem,
+    deleteItem,
+    openDocument,
+    showMovementDocuments,
+    printRomaneio,
+    selectSignedRomaneio,
+    openDigitalSignature
+  };
   document.addEventListener("DOMContentLoaded", boot);
 })();

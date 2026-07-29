@@ -185,7 +185,7 @@
           <button id="exportExitsButton" class="btn btn-secondary">Exportar CSV</button>
         </div>
         <div class="table-card"><div class="table-wrap">
-          <table><thead><tr><th>Data</th><th>Item</th><th>Quantidade</th><th>OS / Chassi</th><th>Finalidade</th><th>Solicitante</th><th>Anexos</th></tr></thead>
+          <table class="exits-table"><thead><tr><th>Data</th><th>Item</th><th>Quantidade</th><th>OS / Chassi</th><th>Finalidade</th><th>Solicitante</th><th>Romaneio</th><th>Ações</th></tr></thead>
           <tbody id="exitsTableBody"></tbody></table>
         </div></div>
       </section>
@@ -458,9 +458,58 @@
         <label class="span-2">Observações<textarea name="observacoes" rows="3"></textarea></label>
         <label class="span-2 upload-box">Comprovantes da saída
           <input id="exitFiles" name="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
-          <span>OS, requisição, foto, autorização ou comprovante.</span>
+          <span>Opcional: OS, requisição, foto ou autorização. O romaneio será assinado exclusivamente na tela do tablet.</span>
         </label>
         <div class="form-actions span-2"><button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button><button class="btn btn-primary" type="submit">Confirmar saída</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="signatureModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card signature-modal-card">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">PROJETO ZERO PAPEL</p>
+          <h3>Assinatura digital do romaneio</h3>
+        </div>
+        <button class="icon-button" type="button" data-close-modal aria-label="Fechar">×</button>
+      </div>
+
+      <form id="signatureForm" class="signature-form">
+        <input id="signatureMovementId" type="hidden">
+
+        <div id="signatureRomaneioSummary" class="signature-summary"></div>
+
+        <div class="signature-identification">
+          <label>Nome completo de quem recebeu*
+            <input id="signatureReceiverName" type="text" maxlength="160" autocomplete="name" required>
+          </label>
+          <label>CPF ou matrícula*
+            <input id="signatureReceiverDocument" type="text" maxlength="40" autocomplete="off" required>
+          </label>
+        </div>
+
+        <label class="signature-label">Assine no campo abaixo com o dedo ou a caneta do tablet*</label>
+        <div class="signature-pad-shell">
+          <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+          <span id="signaturePlaceholder" class="signature-placeholder">Assine aqui</span>
+        </div>
+
+        <div class="signature-toolbar">
+          <button id="clearSignatureButton" class="btn btn-ghost" type="button">Limpar assinatura</button>
+          <span>A assinatura será vinculada definitivamente a esta saída e não poderá ser substituída.</span>
+        </div>
+
+        <label class="signature-consent">
+          <input id="signatureConsent" type="checkbox" required>
+          <span>Confirmo que recebi o item descrito neste romaneio e reconheço esta assinatura digital como comprovante da retirada.</span>
+        </label>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
+          <button class="btn btn-success" type="submit">Assinar e salvar romaneio</button>
+        </div>
       </form>
     </div>
   </div>
