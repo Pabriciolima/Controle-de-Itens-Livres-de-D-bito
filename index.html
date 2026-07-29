@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#07111f">
+  <title>Controle de Itens Livres de Débito</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-glow auth-glow-one"></div>
+    <div class="auth-glow auth-glow-two"></div>
+    <div class="auth-card">
+      <div class="brand-mark">LD</div>
+      <p class="eyebrow">GRUPO MONACO • CONTROLE INTERNO</p>
+      <h1>Itens Livres de Débito</h1>
+      <p class="auth-subtitle">Miniestoque de peças REM, garantia sem reposição e materiais enviados pela fábrica.</p>
+
+      <form id="loginForm" class="stack-form">
+        <label>Login da filial ou e-mail do administrador
+          <input id="loginEmail" type="text" autocomplete="username" placeholder="Ex.: 4700" required>
+        </label>
+        <label>Senha
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" minlength="6" required>
+        </label>
+        <button id="loginButton" class="btn btn-primary btn-full" type="submit">Entrar no sistema</button>
+      </form>
+      <p id="authMessage" class="form-message"></p>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark small">LD</div>
+        <div>
+          <strong>Estoque Auxiliar</strong>
+          <span>Livres de débito</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="dashboardView"><span>⌂</span> Visão geral</button>
+        <button class="nav-item" data-view="itemsView"><span>▣</span> Estoque atual</button>
+        <button class="nav-item" data-view="entriesView"><span>↘</span> Entradas</button>
+        <button class="nav-item" data-view="exitsView"><span>↗</span> Saídas</button>
+        <button class="nav-item" data-view="historyView"><span>◷</span> Histórico</button>
+        <button class="nav-item" data-view="documentsView"><span>▤</span> Documentos</button>
+        <button class="nav-item" data-view="archiveView"><span>◇</span> Arquivamento</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-card">
+          <div id="userInitials" class="user-avatar">US</div>
+          <div>
+            <strong id="userName">Usuário</strong>
+            <span id="userRole">Operador</span>
+          </div>
+        </div>
+        <button id="logoutButton" class="btn btn-ghost btn-full">Sair</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <button id="menuButton" class="icon-button mobile-only" aria-label="Abrir menu">☰</button>
+        <div>
+          <p class="eyebrow">CONTROLE • REM / GARANTIA S/R</p>
+          <h2 id="pageTitle">Visão geral</h2>
+        </div>
+      </header>
+
+      <section id="dashboardView" class="view active">
+        <div class="hero-panel">
+          <div>
+            <span class="status-pill online">Sistema operacional</span>
+            <h3>Controle completo dos itens fora do estoque fiscal.</h3>
+            <p>Acompanhe saldo, entradas, saídas, documentos e itens próximos do prazo de arquivamento.</p>
+          </div>
+          <div class="hero-date">
+            <span>Atualizado em</span>
+            <strong id="lastUpdate">--</strong>
+          </div>
+        </div>
+
+        <div class="metric-grid">
+          <article class="metric-card">
+            <span>Itens cadastrados</span><strong id="metricItems">0</strong><small>Códigos ativos</small>
+          </article>
+          <article class="metric-card">
+            <span>Saldo disponível</span><strong id="metricBalance">0</strong><small>Unidades em estoque</small>
+          </article>
+          <article class="metric-card">
+            <span>Entradas no mês</span><strong id="metricEntries">0</strong><small>Unidades recebidas</small>
+          </article>
+          <article class="metric-card">
+            <span>Saídas no mês</span><strong id="metricExits">0</strong><small>Unidades movimentadas</small>
+          </article>
+          <article class="metric-card warning">
+            <span>Estoque baixo</span><strong id="metricLowStock">0</strong><small>Itens para atenção</small>
+          </article>
+          <article class="metric-card danger">
+            <span>Próximos de 2 anos</span><strong id="metricArchive">0</strong><small>Registros com + de 21 meses</small>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div><p class="eyebrow">MOVIMENTAÇÃO</p><h3>Últimas movimentações</h3></div>
+              <button class="link-button" data-go-view="historyView">Ver histórico</button>
+            </div>
+            <div id="recentMovements" class="movement-list empty-state">Nenhuma movimentação registrada.</div>
+          </article>
+          <article class="panel">
+            <div class="panel-header">
+              <div><p class="eyebrow">ATENÇÃO</p><h3>Pendências operacionais</h3></div>
+            </div>
+            <div id="pendingList" class="pending-list empty-state">Nenhuma pendência encontrada.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="itemsView" class="view">
+        <div class="section-toolbar">
+          <div>
+            <p class="eyebrow">SALDO CONSOLIDADO</p>
+            <h3>Estoque atual</h3>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input id="itemSearch" type="search" placeholder="Buscar código, descrição, localização...">
+          <select id="itemBranchFilter"><option value="">Todas as filiais</option></select>
+          <select id="itemStatusFilter">
+            <option value="">Todos os status</option>
+            <option value="disponivel">Disponível</option>
+            <option value="baixo">Estoque baixo</option>
+            <option value="zerado">Sem saldo</option>
+            <option value="bloqueado">Bloqueado</option>
+          </select>
+          <button id="exportItemsButton" class="btn btn-secondary">Exportar CSV</button>
+        </div>
+        <div class="table-card">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Código</th><th>Descrição</th><th>Filial</th><th>Localização</th><th>Saldo</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="itemsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="entriesView" class="view">
+        <div class="section-toolbar">
+          <div><p class="eyebrow">RECEBIMENTOS</p><h3>Entradas de itens</h3></div>
+          <button class="btn btn-success" data-open-modal="entryModal">+ Nova entrada</button>
+        </div>
+        <div class="filter-bar">
+          <input id="entrySearch" type="search" placeholder="Buscar nota, REM, código ou descrição...">
+          <input id="entryStartDate" type="date" title="Data inicial">
+          <input id="entryEndDate" type="date" title="Data final">
+          <button id="exportEntriesButton" class="btn btn-secondary">Exportar CSV</button>
+        </div>
+        <div class="table-card"><div class="table-wrap">
+          <table><thead><tr><th>Data</th><th>Documento</th><th>Item</th><th>Filial</th><th>Quantidade</th><th>Responsável</th><th>Anexos</th></tr></thead>
+          <tbody id="entriesTableBody"></tbody></table>
+        </div></div>
+      </section>
+
+      <section id="exitsView" class="view">
+        <div class="section-toolbar">
+          <div><p class="eyebrow">UTILIZAÇÕES</p><h3>Saídas de itens</h3></div>
+          <button class="btn btn-danger" data-open-modal="exitModal">− Registrar saída</button>
+        </div>
+        <div class="filter-bar">
+          <input id="exitSearch" type="search" placeholder="Buscar OS, chassi, item ou solicitante...">
+          <input id="exitStartDate" type="date">
+          <input id="exitEndDate" type="date">
+          <button id="exportExitsButton" class="btn btn-secondary">Exportar CSV</button>
+        </div>
+        <div class="table-card"><div class="table-wrap">
+          <table><thead><tr><th>Data</th><th>Item</th><th>Quantidade</th><th>OS / Chassi</th><th>Finalidade</th><th>Solicitante</th><th>Anexos</th></tr></thead>
+          <tbody id="exitsTableBody"></tbody></table>
+        </div></div>
+      </section>
+
+      <section id="historyView" class="view">
+        <div class="section-toolbar">
+          <div><p class="eyebrow">RASTREABILIDADE</p><h3>Histórico completo</h3></div>
+          <button id="exportHistoryButton" class="btn btn-secondary">Exportar CSV</button>
+        </div>
+        <div class="filter-bar">
+          <input id="historySearch" type="search" placeholder="Buscar item, documento, OS, usuário...">
+          <select id="historyTypeFilter"><option value="">Todas as movimentações</option><option value="entrada">Entradas</option><option value="saida">Saídas</option><option value="ajuste">Ajustes</option></select>
+        </div>
+        <div id="historyTimeline" class="timeline empty-state">Nenhum histórico disponível.</div>
+      </section>
+
+      <section id="documentsView" class="view">
+        <div class="section-toolbar">
+          <div><p class="eyebrow">COMPROVAÇÕES</p><h3>Central de documentos</h3></div>
+        </div>
+        <div class="filter-bar">
+          <input id="documentSearch" type="search" placeholder="Buscar nome do arquivo, nota, OS ou item...">
+          <select id="documentTypeFilter"><option value="">Todos os documentos</option><option value="entrada">Entrada</option><option value="saida">Saída</option></select>
+        </div>
+        <div id="documentsGrid" class="documents-grid empty-state">Nenhum documento anexado.</div>
+      </section>
+
+      <section id="archiveView" class="view">
+        <div class="section-toolbar">
+          <div><p class="eyebrow">AUDITORIA E RETENÇÃO</p><h3>Central de backups</h3></div>
+        </div>
+        <div class="archive-banner">
+          <div class="archive-icon">◇</div>
+          <div>
+            <h3>Backup disponível desde o primeiro lançamento</h3>
+            <p>Entradas e saídas podem ser exportadas a qualquer momento para auditoria. O prazo de dois anos permanece apenas como indicador de retenção e revisão interna.</p>
+          </div>
+        </div>
+        <div class="metric-grid archive-metrics">
+          <article class="metric-card"><span>Total de movimentações</span><strong id="archiveEligible">0</strong><small>Disponíveis para backup agora</small></article>
+          <article class="metric-card"><span>Documentos anexados</span><strong id="archiveSoon">0</strong><small>Comprovantes preservados</small></article>
+          <article class="metric-card"><span>Acima de 2 anos</span><strong id="archiveDone">0</strong><small>Registros para revisão de retenção</small></article>
+        </div>
+        <div class="panel">
+          <div class="panel-header audit-panel-header">
+            <div>
+              <p class="eyebrow">AUDITORIA</p>
+              <h3>Todos os registros disponíveis</h3>
+            </div>
+            <div class="audit-actions">
+              <button id="exportArchiveButton" class="btn btn-excel">Exportar Excel Premium</button>
+              <button id="printAuditButton" class="btn btn-primary">Imprimir / Salvar PDF</button>
+            </div>
+          </div>
+          <div id="archiveList" class="archive-list empty-state">Nenhuma movimentação registrada.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="itemModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card large">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">ESTOQUE ATUAL</p>
+          <h3 id="itemModalTitle">Editar item</h3>
+        </div>
+        <button class="icon-button" data-close-modal>×</button>
+      </div>
+
+      <form id="itemForm" class="form-grid">
+        <input id="itemEditId" name="id" type="hidden">
+
+        <label>Código da peça*
+          <input name="codigo" required maxlength="80">
+        </label>
+
+        <label>Descrição*
+          <input name="descricao" required maxlength="200">
+        </label>
+
+        <label>Categoria
+          <select name="categoria">
+            <option>REM - Garantia S/R</option>
+            <option>Garantia</option>
+            <option>Campanha técnica</option>
+            <option>Cortesia</option>
+            <option>Bonificação</option>
+            <option>Outro</option>
+          </select>
+        </label>
+
+        <label>Marca
+          <input name="marca">
+        </label>
+
+        <label>Filial
+          <select id="itemFilialSelect" name="filial" disabled>
+            <option value="">Selecione a filial</option>
+          </select>
+          <small>A filial não pode ser alterada após o item entrar no controle.</small>
+        </label>
+
+        <label>CNPJ da filial
+          <input id="itemCnpjInput" name="dn" readonly>
+        </label>
+
+        <label>Localização física*
+          <input name="localizacao" required placeholder="Ex.: Prateleira A-03">
+        </label>
+
+        <label>Status
+          <select name="status">
+            <option value="disponivel">Disponível</option>
+            <option value="bloqueado">Bloqueado</option>
+          </select>
+        </label>
+
+        <label class="span-2">Aplicação / observações
+          <textarea name="observacoes" rows="3"></textarea>
+        </label>
+
+        <div class="form-actions span-2">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="entryModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card large">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">MOVIMENTAÇÃO</p>
+          <h3>Registrar entrada pela nota</h3>
+        </div>
+        <button class="icon-button" data-close-modal>×</button>
+      </div>
+
+      <form id="entryForm" class="form-grid">
+        <label class="span-2">Como deseja lançar o item?*
+          <select id="entryItemMode" name="item_mode" required>
+            <option value="novo">Item ainda não cadastrado — criar automaticamente</option>
+            <option value="existente">Item já cadastrado no estoque</option>
+          </select>
+          <small>Ao informar um código novo, o sistema cria o item e registra a entrada na mesma operação.</small>
+        </label>
+
+        <div id="entryExistingFields" class="span-2 conditional-section hidden">
+          <label>Item já cadastrado*
+            <select id="entryItemSelect" name="item_id">
+              <option value="">Selecione o item</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="entryNewItemFields" class="span-2 conditional-section">
+          <div class="conditional-title">
+            <strong>Dados do novo item</strong>
+            <span>Essas informações formarão automaticamente o cadastro no estoque.</span>
+          </div>
+
+          <div class="form-grid nested-grid">
+            <label>Código da peça*
+              <input id="entryNewCodigo" name="novo_codigo" maxlength="80" placeholder="Ex.: 2R0123456">
+            </label>
+
+            <label>Descrição da peça*
+              <input id="entryNewDescricao" name="novo_descricao" maxlength="200" placeholder="Descrição completa do item">
+            </label>
+
+            <label>Categoria
+              <select name="novo_categoria">
+                <option>REM - Garantia S/R</option>
+                <option>Garantia</option>
+                <option>Campanha técnica</option>
+                <option>Cortesia</option>
+                <option>Bonificação</option>
+                <option>Outro</option>
+              </select>
+            </label>
+
+            <label>Marca
+              <input name="novo_marca" value="Volkswagen">
+            </label>
+
+            <label>Filial*
+              <select id="entryFilialSelect" name="novo_filial">
+                <option value="">Selecione a filial</option>
+              </select>
+            </label>
+
+            <label>CNPJ
+              <input id="entryCnpjInput" name="novo_cnpj" readonly>
+            </label>
+
+            <label>Localização física*
+              <input id="entryNewLocalizacao" name="novo_localizacao" placeholder="Ex.: Prateleira REM A-03">
+            </label>
+</div>
+        </div>
+
+        <div class="span-2 form-divider"><span>Dados da nota e do recebimento</span></div>
+
+        <label>Quantidade*
+          <input name="quantidade" type="number" min="1" step="1" required>
+        </label>
+
+        <label>Data do recebimento*
+          <input name="data_movimento" type="date" required>
+        </label>
+
+        <label>CNPJ do emitente*
+          <input id="entryCnpjEmitente" name="cnpj_emitente" inputmode="numeric"
+            maxlength="18" required placeholder="00.000.000/0000-00">
+        </label>
+
+        <label>Natureza da operação*
+          <input id="entryNaturezaOperacao" name="natureza_operacao" required
+            placeholder="Ex.: REMESSA EM GARANTIA SEM DÉBITO">
+        </label>
+
+        <label>Número da nota*
+          <input id="entryNumeroNota" name="numero_nota" required placeholder="Informe o número da nota">
+        </label>
+
+        <label>Número da REM
+          <input name="numero_rem">
+        </label>
+
+        <label>Responsável pelo recebimento*
+          <input name="responsavel" required>
+        </label>
+
+        <label class="span-2">Observações
+          <textarea name="observacoes" rows="3"></textarea>
+        </label>
+
+        <label class="span-2 upload-box">Anexos da entrada
+          <input id="entryFiles" name="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
+          <span>Nota, REM, imagens ou documentos. Até 6 MB por arquivo.</span>
+        </label>
+
+        <div class="form-actions span-2">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
+          <button class="btn btn-primary" type="submit">Criar item e confirmar entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="exitModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card large">
+      <div class="modal-header"><div><p class="eyebrow">MOVIMENTAÇÃO</p><h3>Registrar saída</h3></div><button class="icon-button" data-close-modal>×</button></div>
+      <form id="exitForm" class="form-grid">
+        <label>Item*<select id="exitItemSelect" name="item_id" required><option value="">Selecione</option></select></label>
+        <label>Quantidade*<input name="quantidade" type="number" min="1" step="1" required><small id="exitBalanceHint">Saldo disponível: 0</small></label>
+        <label>Data da saída*<input name="data_movimento" type="date" required></label>
+        <label>Finalidade*<select name="finalidade" required><option>Aplicação em garantia</option><option>Aplicação em veículo</option><option>Campanha técnica</option><option>Transferência</option><option>Devolução à fábrica</option><option>Teste</option><option>Descarte</option><option>Outro</option></select></label>
+        <label>Número da OS<input name="numero_os"></label>
+        <label>Chassi<input name="chassi"></label>
+        <label>Placa<input name="placa"></label>
+        <label>Cliente<input name="cliente"></label>
+        <label>Solicitante*<input name="solicitante" required></label>
+        <label>Autorizado por<input name="autorizado_por"></label>
+        <label class="span-2">Observações<textarea name="observacoes" rows="3"></textarea></label>
+        <label class="span-2 upload-box">Comprovantes da saída
+          <input id="exitFiles" name="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
+          <span>OS, requisição, foto, autorização ou comprovante.</span>
+        </label>
+        <div class="form-actions span-2"><button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button><button class="btn btn-primary" type="submit">Confirmar saída</button></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="itemDetailModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card large">
+      <div class="modal-header"><div><p class="eyebrow">FICHA DO ITEM</p><h3 id="detailTitle">Detalhes</h3></div><button class="icon-button" data-close-modal>×</button></div>
+      <div id="itemDetailContent"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="./config.js"></script>
+  <script src="./script.js"></script>
+</body>
+</html>
