@@ -353,7 +353,8 @@
 
           <div class="form-grid nested-grid">
             <label>Código da peça*
-              <input id="entryNewCodigo" name="novo_codigo" maxlength="80" placeholder="Ex.: 2R0123456">
+              <input id="entryNewCodigo" name="novo_codigo" maxlength="80" placeholder="Ex.: 2R0123456" autocomplete="off">
+              <div id="entryDuplicateSuggestion" class="duplicate-suggestion hidden" role="status"></div>
             </label>
 
             <label>Descrição da peça*
@@ -442,73 +443,61 @@
 
   <div id="exitModal" class="modal" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card large">
-      <div class="modal-header"><div><p class="eyebrow">MOVIMENTAÇÃO</p><h3>Registrar saída</h3></div><button class="icon-button" data-close-modal>×</button></div>
-      <form id="exitForm" class="form-grid">
-        <label>Item*<select id="exitItemSelect" name="item_id" required><option value="">Selecione</option></select></label>
-        <label>Quantidade*<input name="quantidade" type="number" min="1" step="1" required><small id="exitBalanceHint">Saldo disponível: 0</small></label>
-        <label>Data da saída*<input name="data_movimento" type="date" required></label>
-        <label>Finalidade*<select name="finalidade" required><option>Aplicação em garantia</option><option>Aplicação em veículo</option><option>Campanha técnica</option><option>Transferência</option><option>Devolução à fábrica</option><option>Teste</option><option>Descarte</option><option>Outro</option></select></label>
-        <label>Número da OS<input name="numero_os"></label>
-        <label>Chassi<input name="chassi"></label>
-        <label>Placa<input name="placa"></label>
-        <label>Cliente<input name="cliente"></label>
-        <label>Solicitante*<input name="solicitante" required></label>
-        <label>Autorizado por<input name="autorizado_por"></label>
-        <label class="span-2">Observações<textarea name="observacoes" rows="3"></textarea></label>
-        <label class="span-2 upload-box">Comprovantes da saída
-          <input id="exitFiles" name="files" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx">
-          <span>Opcional: OS, requisição, foto ou autorização. O romaneio será assinado exclusivamente na tela do tablet.</span>
-        </label>
-        <div class="form-actions span-2"><button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button><button class="btn btn-primary" type="submit">Confirmar saída</button></div>
-      </form>
-    </div>
-  </div>
-
-  <div id="signatureModal" class="modal" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal></div>
-    <div class="modal-card signature-modal-card">
+    <div class="modal-card large exit-modal-card">
       <div class="modal-header">
-        <div>
-          <p class="eyebrow">PROJETO ZERO PAPEL</p>
-          <h3>Assinatura digital do romaneio</h3>
-        </div>
+        <div><p class="eyebrow">MOVIMENTAÇÃO • ZERO PAPEL</p><h3>Registrar saída e assinar romaneio</h3></div>
         <button class="icon-button" type="button" data-close-modal aria-label="Fechar">×</button>
       </div>
 
-      <form id="signatureForm" class="signature-form">
-        <input id="signatureMovementId" type="hidden">
+      <form id="exitForm" class="form-grid exit-form" autocomplete="off">
+        <label>Item*
+          <select id="exitItemSelect" name="item_id" required><option value="">Selecione</option></select>
+        </label>
+        <label>Quantidade*
+          <input name="quantidade" type="number" min="1" step="1" inputmode="numeric" required>
+          <small id="exitBalanceHint">Saldo disponível: 0</small>
+        </label>
+        <label>Data da saída*<input name="data_movimento" type="date" required></label>
+        <label>Finalidade*
+          <select name="finalidade" required><option>Aplicação em garantia</option><option>Aplicação em veículo</option><option>Campanha técnica</option><option>Transferência</option><option>Devolução à fábrica</option><option>Teste</option><option>Descarte</option><option>Outro</option></select>
+        </label>
+        <label>Número da OS<input name="numero_os" inputmode="numeric"></label>
+        <label>Chassi<input name="chassi" autocapitalize="characters"></label>
+        <label>Placa<input name="placa" autocapitalize="characters"></label>
+        <label>Cliente<input name="cliente"></label>
+        <label>Solicitante*<input name="solicitante" required></label>
+        <label>Requisitado por<input name="autorizado_por"></label>
+        <label class="span-2">Observações<textarea name="observacoes" rows="3"></textarea></label>
 
-        <div id="signatureRomaneioSummary" class="signature-summary"></div>
+        <div class="span-2 form-divider"><span>Recebimento e assinatura digital definitiva</span></div>
 
-        <div class="signature-identification">
-          <label>Nome completo de quem recebeu*
-            <input id="signatureReceiverName" type="text" maxlength="160" autocomplete="name" required>
-          </label>
-          <label>CPF ou matrícula*
-            <input id="signatureReceiverDocument" type="text" maxlength="40" autocomplete="off" required>
-          </label>
-        </div>
-
-        <label class="signature-label">Assine no campo abaixo com o dedo ou a caneta do tablet*</label>
-        <div class="signature-pad-shell">
-          <canvas id="signatureCanvas" class="signature-canvas"></canvas>
-          <span id="signaturePlaceholder" class="signature-placeholder">Assine aqui</span>
-        </div>
-
-        <div class="signature-toolbar">
-          <button id="clearSignatureButton" class="btn btn-ghost" type="button">Limpar assinatura</button>
-          <span>A assinatura será vinculada definitivamente a esta saída e não poderá ser substituída.</span>
-        </div>
-
-        <label class="signature-consent">
-          <input id="signatureConsent" type="checkbox" required>
-          <span>Confirmo que recebi o item descrito neste romaneio e reconheço esta assinatura digital como comprovante da retirada.</span>
+        <label>Nome completo de quem recebeu*
+          <input id="signatureReceiverName" name="recebedor_nome" maxlength="160" autocomplete="name" required>
+        </label>
+        <label>CPF ou matrícula*
+          <input id="signatureReceiverDocument" name="recebedor_documento" maxlength="40" inputmode="text" required>
         </label>
 
-        <div class="form-actions">
+        <div class="span-2 integrated-signature">
+          <label class="signature-label">Assine abaixo com o dedo ou a caneta do tablet*</label>
+          <div class="signature-pad-shell">
+            <canvas id="signatureCanvas" class="signature-canvas"></canvas>
+            <span id="signaturePlaceholder" class="signature-placeholder">Assine aqui</span>
+          </div>
+          <div class="signature-toolbar">
+            <button id="clearSignatureButton" class="btn btn-ghost" type="button">Limpar assinatura</button>
+            <span>Depois de confirmar a saída, esta assinatura será permanente e não poderá ser alterada nem pelo administrador.</span>
+          </div>
+        </div>
+
+        <label class="span-2 signature-consent">
+          <input id="signatureConsent" type="checkbox" required>
+          <span>Confirmo que recebi o item descrito neste romaneio e reconheço esta assinatura digital como comprovante definitivo da retirada.</span>
+        </label>
+
+        <div class="form-actions span-2">
           <button type="button" class="btn btn-ghost" data-close-modal>Cancelar</button>
-          <button class="btn btn-success" type="submit">Assinar e salvar romaneio</button>
+          <button class="btn btn-primary" type="submit">Confirmar saída e salvar assinatura</button>
         </div>
       </form>
     </div>

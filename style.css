@@ -868,3 +868,33 @@ tbody tr:last-child td{border-bottom:0}
 .romaneio-actions .romaneio-print{color:#32445e;background:#f7f9fc}
 .signature-canvas{touch-action:none;user-select:none;-webkit-user-select:none}
 .signature-pad-shell{overscroll-behavior:contain}
+
+
+/* Saída assinada no ato — Zero Papel */
+:root{--app-viewport-height:100dvh}
+.exit-modal-card{max-height:min(94dvh,var(--app-viewport-height));overflow:auto;overscroll-behavior:contain;scroll-padding-bottom:130px}
+.exit-form{padding-bottom:4px}
+.integrated-signature{display:grid;gap:12px;padding:18px;border:1px solid #dce5ee;border-radius:18px;background:#f8fafc}
+.integrated-signature .signature-pad-shell{height:260px;background:#fff}
+.duplicate-suggestion{display:grid;gap:4px;margin-top:4px;padding:10px 12px;border:1px solid #f0c46d;border-radius:11px;background:#fff8e6;color:#7a5200;font-size:10px;line-height:1.45}
+.duplicate-suggestion strong{font-size:11px}
+.duplicate-suggestion span{font-weight:600}
+.romaneio-actions{min-width:0;display:flex;flex-wrap:wrap}
+.romaneio-actions .mini-btn{white-space:nowrap}
+body.keyboard-open .modal{align-items:flex-start}
+body.keyboard-open .modal-card{max-height:var(--app-viewport-height);border-radius:0}
+body.keyboard-open .form-actions{position:relative;bottom:auto;margin:10px -19px -19px}
+
+@media(max-width:920px){
+  .exit-modal-card{height:var(--app-viewport-height);max-height:var(--app-viewport-height);border-radius:22px 22px 0 0}
+  .integrated-signature{padding:13px}
+  .integrated-signature .signature-pad-shell{height:230px}
+  .exit-form input,.exit-form select,.exit-form textarea{font-size:16px}
+}
+@media(max-width:600px){
+  .exit-modal-card{padding-bottom:max(12px,env(safe-area-inset-bottom))}
+  .integrated-signature .signature-pad-shell{height:210px}
+  .signature-placeholder{font-size:19px}
+  .exit-form .form-actions{gap:8px}
+  .exit-form .form-actions .btn{flex:1;min-width:0;padding-left:9px;padding-right:9px}
+}

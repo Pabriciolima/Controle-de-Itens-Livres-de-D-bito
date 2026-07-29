@@ -62,8 +62,15 @@
   }
 
   async function boot() {
-    bindUI();
-    setDefaultDates();
+    try {
+      bindUI();
+      setDefaultDates();
+    } catch (error) {
+      console.error("Erro ao inicializar a interface:", error);
+      const message = $("#authMessage");
+      if (message) message.textContent = "Falha ao carregar a interface. Atualize a página com Ctrl + F5.";
+      return;
+    }
 
     if (!configured) {
       $("#authMessage").textContent = "Configure sua URL e Publishable Key no arquivo config.js.";
@@ -95,7 +102,7 @@
     $("#exitItemSelect").addEventListener("change", updateExitBalance);
     $("#itemFilialSelect").addEventListener("change", updateItemCnpj);
     $("#entryItemMode").addEventListener("change", updateEntryMode);
-    $("#entryFilialSelect").addEventListener("change", updateEntryCnpj);
+    $("#entryFilialSelect").addEventListener("change", () => { updateEntryCnpj(); suggestExistingEntryItem(); });
     $("#entryCnpjEmitente").addEventListener("input", formatCnpjEmitente);
 
     ["itemSearch","itemBranchFilter","itemStatusFilter"].forEach(id => $(`#${id}`).addEventListener("input", renderItems));
@@ -113,11 +120,11 @@
     $("#exportHistoryButton").addEventListener("click", () => exportCSV("historico.csv", state.movements));
     $("#exportArchiveButton").addEventListener("click", exportAuditExcelPremium);
     $("#printAuditButton").addEventListener("click", printAuditReport);
-    $("#signatureForm").addEventListener("submit", saveDigitalSignature);
-    $("#clearSignatureButton").addEventListener("click", clearDigitalSignature);
+    $("#clearSignatureButton")?.addEventListener("click", clearDigitalSignature);
     window.addEventListener("resize", () => {
-      if ($("#signatureModal")?.classList.contains("open")) resizeSignatureCanvas();
+      if ($("#exitModal")?.classList.contains("open")) resizeSignatureCanvas();
     });
+    configureMobileViewport();
   }
 
   function setDefaultDates() {
@@ -126,24 +133,47 @@
 
   async function login(event) {
     event.preventDefault();
-    if (!sb) return;
-    const button = $("#loginButton");
-    setLoading(button, true, "Entrando...");
-    $("#authMessage").textContent = "";
 
-    const loginInformado = $("#loginEmail").value.trim();
+    const message = $("#authMessage");
+    const button = $("#loginButton");
+
+    if (!sb) {
+      if (message) message.textContent = "Supabase não configurado. Confira o arquivo config.js.";
+      return;
+    }
+
+    const loginInformado = $("#loginEmail")?.value.trim() || "";
+    const senhaInformada = $("#loginPassword")?.value || "";
+
+    if (!loginInformado || !senhaInformada) {
+      if (message) message.textContent = "Informe o login e a senha.";
+      return;
+    }
+
     const codigoFilial = /^[0-9]{4}F?$/i.test(loginInformado);
     const email = codigoFilial
       ? `${loginInformado.toLowerCase()}@acesso.grupomonaco.com.br`
       : loginInformado.toLowerCase();
 
-    const { error } = await sb.auth.signInWithPassword({
-      email,
-      password: $("#loginPassword").value
-    });
+    setLoading(button, true, "Entrando...");
+    if (message) message.textContent = "";
 
-    setLoading(button, false);
-    if (error) $("#authMessage").textContent = translateError(error.message);
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({
+        email,
+        password: senhaInformada
+      });
+
+      if (error) throw error;
+      if (!data?.session) throw new Error("A autenticação não retornou uma sessão válida.");
+
+      await enterApp(data.session);
+    } catch (error) {
+      console.error("Falha no login:", error);
+      if (message) message.textContent = translateError(error?.message || "Falha ao entrar no sistema.");
+    } finally {
+      setLoading(button, false);
+    }
   }
 
   async function enterApp(session) {
@@ -396,7 +426,7 @@
       const signed = signedRomaneioAttachment(m.id);
       const status = signed
         ? `<span class="badge success">Romaneio assinado</span>`
-        : `<span class="badge warning">Aguardando assinatura</span>`;
+        : `<span class="badge neutral">Registro antigo sem assinatura</span>`;
 
       return `
         <tr>
@@ -409,11 +439,8 @@
           <td data-label="Romaneio"><div class="romaneio-status">${status}<small>${esc(romaneioNumber(m))}</small></div></td>
           <td data-label="Ações">
             <div class="table-actions romaneio-actions">
-              <button class="mini-btn romaneio-sign" onclick="window.app.openDigitalSignature('${m.id}')">${signed ? "Assinar novamente" : "Assinar no tablet"}</button>
               <button class="mini-btn romaneio-print" onclick="window.app.printRomaneio('${m.id}')">Imprimir</button>
-              <button class="mini-btn romaneio-upload" onclick="window.app.selectSignedRomaneio('${m.id}')">${signed ? "Substituir arquivo" : "Anexar arquivo"}</button>
-              ${signed ? `<button class="mini-btn romaneio-view" onclick="window.app.openDocument('${signed.id}')">Ver assinado</button>` : ""}
-              ${attachmentButton(m.id, true)}
+              ${signed ? `<button class="mini-btn romaneio-view" onclick="window.app.openDocument('${signed.id}')">Visualizar assinatura</button>` : ""}
             </div>
           </td>
         </tr>`;
@@ -554,6 +581,13 @@
     if (!validateFiles(files)) return;
 
     const isNew = data.get("item_mode") === "novo";
+    if (isNew) {
+      const duplicate = findExistingEntryItem(data.get("novo_codigo"), getEntrySelectedBranch());
+      if (duplicate) {
+        applyExistingItemSuggestion(duplicate);
+        return toast(`O item ${duplicate.codigo} já possui cadastro nesta filial. Ele foi selecionado como sugestão; confirme a entrada no cadastro existente.`, "error", "Item já cadastrado");
+      }
+    }
     const cnpjEmitente = data.get("cnpj_emitente")?.replace(/\D/g, "") || "";
 
     if (!validarCnpjBasico(cnpjEmitente)) {
@@ -626,9 +660,20 @@
     event.preventDefault();
     const button = event.submitter;
     const data = new FormData(event.target);
-    const files = [...$("#exitFiles").files];
-    if (!validateFiles(files)) return;
-    setLoading(button,true,"Registrando...");
+    const receiverName = String(data.get("recebedor_nome") || "").trim();
+    const receiverDocument = String(data.get("recebedor_documento") || "").trim();
+
+    if (!receiverName || !receiverDocument) {
+      return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
+    }
+    if (!signatureHasInk) {
+      return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
+    }
+    if (!$("#signatureConsent")?.checked) {
+      return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
+    }
+
+    setLoading(button, true, "Salvando saída e assinatura...");
 
     try {
       const { data: result, error } = await sb.rpc("registrar_saida", {
@@ -644,22 +689,36 @@
       const movementId = typeof result === "object" && result !== null
         ? result.movimentacao_id || result.id
         : result;
+      if (!movementId) throw new Error("A saída foi processada, mas o identificador da movimentação não foi retornado.");
 
-      if (!movementId) {
-        throw new Error("A saída foi processada, mas o identificador da movimentação não foi retornado.");
-      }
+      const item = state.items.find(i => i.id === data.get("item_id"));
+      const movementForDocument = {
+        id: movementId, tipo: "saida", data_movimento: data.get("data_movimento"),
+        quantidade: Number(data.get("quantidade")), finalidade: data.get("finalidade"),
+        numero_os: data.get("numero_os"), chassi: data.get("chassi"), placa: data.get("placa"),
+        cliente: data.get("cliente"), solicitante: data.get("solicitante"),
+        autorizado_por: data.get("autorizado_por"), observacoes: data.get("observacoes"),
+        itens: item
+      };
 
-      await uploadFiles(files, movementId, "saida");
+      const signatureDataUrl = $("#signatureCanvas").toDataURL("image/png");
+      const svg = buildSignedRomaneioSvg(movementForDocument, receiverName, receiverDocument, signatureDataUrl);
+      const file = await svgToPngFile(svg, `ROMANEIO_ASSINADO_${romaneioNumber(movementForDocument)}_DIGITAL.png`);
+      await uploadFiles([file], movementId, "saida");
+
       event.target.reset();
       setDefaultDates();
       updateExitBalance();
+      clearDigitalSignature();
       closeModals();
       await loadAll();
-      toast("Saída registrada. O romaneio foi preparado para impressão e assinatura.");
-      printRomaneio(movementId);
+      toast("Saída e romaneio digital assinado foram salvos definitivamente.");
     } catch (error) {
-      toast(translateError(error.message),"error","Saída não registrada");
-    } finally { setLoading(button,false); }
+      console.error(error);
+      toast(translateError(error.message), "error", "Saída não registrada");
+    } finally {
+      setLoading(button, false);
+    }
   }
 
   async function uploadFiles(files, movementId, type) {
@@ -791,6 +850,18 @@
   function openDigitalSignature(movementId) {
     const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
     if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
+
+    if (signedRomaneioAttachment(movementId)) {
+      return toast(
+        "Este romaneio já foi assinado e a assinatura é definitiva.",
+        "error",
+        "Assinatura já finalizada"
+      );
+    }
+
+    if (!$("#signatureModal") || !$("#signatureForm")) {
+      return toast("O formulário de assinatura não foi carregado. Atualize a página.", "error", "Assinatura indisponível");
+    }
 
     $("#signatureMovementId").value = movementId;
     $("#signatureReceiverName").value = movement.solicitante || "";
@@ -961,7 +1032,7 @@
   <text x="102" y="885" class="label">CLIENTE</text><text x="102" y="915" class="value">${xmlEscape(movement.cliente || "—")}</text>
   <text x="600" y="885" class="label">FINALIDADE</text><text x="600" y="915" class="value">${xmlEscape(movement.finalidade || "—")}</text>
   <text x="102" y="970" class="label">SOLICITANTE</text><text x="102" y="1000" class="value">${xmlEscape(movement.solicitante || "—")}</text>
-  <text x="600" y="970" class="label">AUTORIZADO POR</text><text x="600" y="1000" class="value">${xmlEscape(movement.autorizado_por || "—")}</text>
+  <text x="600" y="970" class="label">REQUISITADO POR</text><text x="600" y="1000" class="value">${xmlEscape(movement.autorizado_por || "—")}</text>
   <text x="102" y="1055" class="label">OBSERVAÇÕES</text>${textLines(observationLines,102,1085)}
 
   <rect x="82" y="1185" width="1076" height="44" rx="6" fill="#12835b"/><text x="102" y="1214" class="section">RECEBIMENTO E ASSINATURA DIGITAL</text>
@@ -1037,6 +1108,10 @@
     const receiverDocument = $("#signatureReceiverDocument").value.trim();
 
     if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
+    if (signedRomaneioAttachment(movementId)) {
+      closeModals();
+      return toast("Este romaneio já possui assinatura digital definitiva.", "error", "Assinatura já finalizada");
+    }
     if (!receiverName || !receiverDocument) return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
     if (!signatureHasInk) return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
     if (!$("#signatureConsent").checked) return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
@@ -1050,8 +1125,10 @@
         `ROMANEIO_ASSINADO_${romaneioNumber(movement)}_DIGITAL.png`
       );
 
-      const existing = signedRomaneioAttachment(movementId);
-      if (existing) await deleteAttachment(existing);
+      // A assinatura é definitiva: nunca substitua um romaneio já salvo.
+      if (signedRomaneioAttachment(movementId)) {
+        throw new Error("Este romaneio já possui assinatura digital definitiva.");
+      }
       await uploadFiles([file], movementId, "saida");
 
       closeModals();
@@ -1065,47 +1142,6 @@
     }
   }
 
-  function selectSignedRomaneio(movementId) {
-    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
-    if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
-
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".pdf,.jpg,.jpeg,.png,.webp";
-    input.style.display = "none";
-
-    input.addEventListener("change", async () => {
-      const file = input.files?.[0];
-      input.remove();
-      if (!file) return;
-      if (!validateFiles([file])) return;
-
-      const existing = signedRomaneioAttachment(movementId);
-      const confirmed = existing
-        ? window.confirm("Já existe um romaneio assinado para esta saída. Deseja substituí-lo?")
-        : true;
-      if (!confirmed) return;
-
-      try {
-        const safeOriginalName = file.name.replace(/^romaneio_assinado_/i, "");
-        const renamedFile = new File(
-          [file],
-          `ROMANEIO_ASSINADO_${romaneioNumber(movement)}_${safeOriginalName}`,
-          { type: file.type, lastModified: file.lastModified }
-        );
-
-        if (existing) await deleteAttachment(existing);
-        await uploadFiles([renamedFile], movementId, "saida");
-        toast("Romaneio assinado anexado e vinculado à saída.");
-        await loadAll();
-      } catch (error) {
-        toast(translateError(error.message), "error", "Romaneio não anexado");
-      }
-    }, { once: true });
-
-    document.body.appendChild(input);
-    input.click();
-  }
 
   async function deleteAttachment(attachment) {
     if (!attachment) return;
@@ -1124,7 +1160,10 @@
     if (dbError) throw dbError;
   }
 
-  function printRomaneio(movementId) {
+  async function printRomaneio(movementId) {
+    const signed = signedRomaneioAttachment(movementId);
+    if (signed) return printSignedRomaneioAttachment(signed);
+
     const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
     if (!movement) return toast("Saída não encontrada para emissão.", "error", "Romaneio indisponível");
 
@@ -1186,7 +1225,7 @@
         <div class="field"><span>Chassi</span><strong>${esc(movement.chassi || "—")}</strong></div>
         <div class="field span-2"><span>Cliente</span><strong>${esc(movement.cliente || "—")}</strong></div>
         <div class="field"><span>Solicitante</span><strong>${esc(movement.solicitante || "—")}</strong></div>
-        <div class="field span-2"><span>Autorizado por</span><strong>${esc(movement.autorizado_por || "—")}</strong></div>
+        <div class="field span-2"><span>Requisitado por</span><strong>${esc(movement.autorizado_por || "—")}</strong></div>
         <div class="field"><span>Responsável pela entrega</span><strong>${esc(state.profile?.nome || "—")}</strong></div>
         <div class="field span-3"><span>Observações</span><strong>${esc(movement.observacoes || "Sem observações")}</strong></div>
       </div></section>
@@ -1924,6 +1963,88 @@
     URL.revokeObjectURL(url);
   }
 
+  let duplicateSuggestionTimer = null;
+
+  function getEntrySelectedBranch() {
+    return $("#entryFilialSelect")?.value || state.profile?.filial || "";
+  }
+
+  function findExistingEntryItem(code, branch) {
+    const normalizedCode = normalize(String(code || "").replace(/\s+/g, ""));
+    if (!normalizedCode || !branch) return null;
+    return state.items.find(item =>
+      normalize(String(item.codigo || "").replace(/\s+/g, "")) === normalizedCode &&
+      item.filial === branch && item.status !== "arquivado"
+    ) || null;
+  }
+
+  function applyExistingItemSuggestion(item) {
+    if (!item) return;
+    $("#entryItemMode").value = "existente";
+    updateEntryMode();
+    $("#entryItemSelect").value = item.id;
+    const suggestion = $("#entryDuplicateSuggestion");
+    if (suggestion) {
+      suggestion.classList.remove("hidden");
+      suggestion.innerHTML = `<strong>Item já cadastrado nesta filial.</strong><span>${esc(item.codigo)} — ${esc(item.descricao)} • Saldo atual: ${Number(item.saldo || 0)}. O cadastro existente foi selecionado.</span>`;
+    }
+  }
+
+  function suggestExistingEntryItem() {
+    const input = $("#entryNewCodigo");
+    const suggestion = $("#entryDuplicateSuggestion");
+    if (!input || $("#entryItemMode")?.value !== "novo") return;
+    const item = findExistingEntryItem(input.value, getEntrySelectedBranch());
+    if (item) {
+      applyExistingItemSuggestion(item);
+      toast(`O código ${item.codigo} já possui cadastro nesta filial. Use o item sugerido para registrar apenas a nova entrada.`, "error", "Item já cadastrado");
+    } else if (suggestion) {
+      suggestion.classList.add("hidden");
+      suggestion.innerHTML = "";
+    }
+  }
+
+  function debounceSuggestExistingEntryItem() {
+    clearTimeout(duplicateSuggestionTimer);
+    duplicateSuggestionTimer = setTimeout(suggestExistingEntryItem, 450);
+  }
+
+  function configureMobileViewport() {
+    const update = () => {
+      const viewport = window.visualViewport;
+      const height = viewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--app-viewport-height", `${height}px`);
+      document.body.classList.toggle("keyboard-open", Boolean(viewport && window.innerHeight - viewport.height > 140));
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+
+    document.addEventListener("focusin", event => {
+      if (!event.target.matches("input,select,textarea")) return;
+      setTimeout(() => event.target.scrollIntoView({ behavior: "smooth", block: "center" }), 260);
+    });
+  }
+
+  async function printSignedRomaneioAttachment(attachment) {
+    const { data, error } = await sb.storage
+      .from(config.STORAGE_BUCKET)
+      .createSignedUrl(attachment.caminho_storage, 120);
+    if (error || !data?.signedUrl) return toast("Não foi possível preparar o romaneio assinado para impressão.", "error", "Impressão indisponível");
+
+    const oldFrame = document.getElementById("signedRomaneioPrintFrame");
+    oldFrame?.remove();
+    const frame = document.createElement("iframe");
+    frame.id = "signedRomaneioPrintFrame";
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument || frame.contentWindow?.document;
+    doc.open();
+    doc.write(`<!doctype html><html><head><style>@page{size:A4 portrait;margin:0}html,body{margin:0;width:100%;height:100%}img{display:block;width:100%;height:auto}</style></head><body><img src="${esc(data.signedUrl)}"></body></html>`);
+    doc.close();
+    frame.onload = () => setTimeout(() => { frame.contentWindow.focus(); frame.contentWindow.print(); setTimeout(() => frame.remove(), 1500); }, 250);
+  }
+
   function showView(viewId) {
     $$(".view").forEach(v => v.classList.toggle("active",v.id===viewId));
     $$(".nav-item").forEach(n => n.classList.toggle("active",n.dataset.view===viewId));
@@ -1937,6 +2058,14 @@
     $(`#${id}`)?.classList.add("open");
     $(`#${id}`)?.setAttribute("aria-hidden","false");
     document.body.style.overflow="hidden";
+    if (id === "exitModal") {
+      requestAnimationFrame(() => {
+        resizeSignatureCanvas();
+        configureSignatureCanvas();
+        clearDigitalSignature();
+        $("#signatureConsent").checked = false;
+      });
+    }
   }
   function closeModals() {
     $$(".modal.open").forEach(m => {m.classList.remove("open");m.setAttribute("aria-hidden","true")});
@@ -1971,8 +2100,6 @@
     openDocument,
     showMovementDocuments,
     printRomaneio,
-    selectSignedRomaneio,
-    openDigitalSignature
   };
   document.addEventListener("DOMContentLoaded", boot);
 })();
