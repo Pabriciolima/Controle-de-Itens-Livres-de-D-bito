@@ -382,8 +382,9 @@
               </select>
             </label>
 
-            <label>CNPJ
-              <input id="entryCnpjInput" name="novo_cnpj" readonly>
+            <label>CNPJ da filial*
+              <input id="entryCnpjInput" name="novo_cnpj" inputmode="numeric" maxlength="18" placeholder="Digite ou selecione a filial para preencher" required>
+              <small>É preenchido automaticamente ao selecionar a filial, mas pode ser corrigido manualmente.</small>
             </label>
 
             <label>Localização física*
@@ -511,9 +512,11 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
-  <script src="./config.js"></script>
+  <script src="./firebase-config.js"></script>
   <script src="./script.js"></script>
 </body>
 </html>

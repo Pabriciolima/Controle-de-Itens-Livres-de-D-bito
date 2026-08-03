@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function active() { return signedIn() && userDoc().data.active == true; }
+    function role() { return userDoc().data.role; }
+    function branch() { return userDoc().data.branchCode; }
+    function globalAccess() { return active() && (role() == 'admin' || role() == 'diretor'); }
+    function operator() { return active() && role() == 'operador'; }
+
+    match /users/{uid} {
+      allow read: if active() && (request.auth.uid == uid || globalAccess());
+      allow create, update, delete: if active() && role() == 'admin';
+    }
+
+    match /branches/{branchId} {
+      allow read: if active();
+      allow create, update, delete: if active() && role() == 'admin';
+    }
+
+    match /items/{itemId} {
+      allow read: if globalAccess() || (operator() && resource.data.branchCode == branch());
+      allow create: if active() && (
+        role() == 'admin' ||
+        (operator() && request.resource.data.branchCode == branch())
+      );
+      allow update: if active() && (
+        role() == 'admin' ||
+        (operator() && resource.data.branchCode == branch() && request.resource.data.branchCode == branch())
+      ) && request.resource.data.branchCode == resource.data.branchCode;
+      allow delete: if active() && role() == 'admin';
+    }
+
+    match /movements/{movementId} {
+      allow read: if globalAccess() || (operator() && resource.data.branchCode == branch());
+      allow create: if active() && (
+        role() == 'admin' ||
+        (operator() && request.resource.data.branchCode == branch())
+      )
+      && request.resource.data.status == 'ativo'
+      && (
+        request.resource.data.type == 'entrada' ||
+        (
+          request.resource.data.type == 'saida'
+          && request.resource.data.signatureLocked == true
+          && request.resource.data.signatureData is string
+          && request.resource.data.receiverName is string
+          && request.resource.data.receiverDocument is string
+        )
+      );
+      allow update, delete: if false;
+    }
+
+    match /attachments/{attachmentId} {
+      allow read: if globalAccess() || (operator() && resource.data.branchCode == branch());
+      allow create: if active() && (
+        role() == 'admin' ||
+        (operator() && request.resource.data.branchCode == branch())
+      ) && request.resource.data.dataUrl is string;
+      allow update: if false;
+      allow delete: if active() && role() == 'admin';
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if globalAccess();
+      allow create: if active();
+      allow update, delete: if false;
+    }
+  }
+}

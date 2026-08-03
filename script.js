@@ -1,27 +1,57 @@
 (() => {
   "use strict";
 
-  const config = window.APP_CONFIG || {};
-  const configured = config.SUPABASE_URL && !config.SUPABASE_URL.includes("COLE_AQUI")
-    && config.SUPABASE_PUBLISHABLE_KEY && !config.SUPABASE_PUBLISHABLE_KEY.includes("COLE_AQUI");
+  const config = window.FIREBASE_CONFIG || {};
+  const configured = Boolean(
+    config.apiKey && config.authDomain && config.projectId && window.firebase
+  );
 
-  const sb = configured
-    ? window.supabase.createClient(config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY)
-    : null;
+  let auth = null;
+  let db = null;
+
+  if (configured) {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    db.settings({ ignoreUndefinedProperties: true });
+  }
 
   const FILIAIS = [
-    { codigo: "4700",  cnpj: "05024583000104", localidade: "BELÉM",        uf: "PA" },
-    { codigo: "4731",  cnpj: "05442121000107", localidade: "SÃO LUÍS",     uf: "MA" },
-    { codigo: "1960",  cnpj: "05442121000298", localidade: "BACABAL",       uf: "MA" },
-    { codigo: "4756",  cnpj: "09597026000133", localidade: "MACAPÁ",        uf: "AP" },
-    { codigo: "4730",  cnpj: "05285816000122", localidade: "TERESINA",      uf: "PI" },
-    { codigo: "4730F", cnpj: "05285816000394", localidade: "URUÇUÍ",        uf: "PI" },
-    { codigo: "1928",  cnpj: "07811058000326", localidade: "SINOP",          uf: "MT" },
-    { codigo: "4738",  cnpj: "07811058000164", localidade: "CUIABÁ",         uf: "MT" },
-    { codigo: "4774",  cnpj: "07811058000245", localidade: "RONDONÓPOLIS",   uf: "MT" },
-    { codigo: "4977",  cnpj: "84652296000115", localidade: "PORTO VELHO",    uf: "RO" },
-    { codigo: "4977F", cnpj: "84652296000620", localidade: "JI-PARANÁ",      uf: "RO" },
-    { codigo: "1970",  cnpj: "84652296000204", localidade: "VILHENA",        uf: "RO" }
+    { codigo: "4700",  cnpj: "05024583000104", localidade: "BELÉM",         uf: "PA" },
+    { codigo: "4731",  cnpj: "05442121000107", localidade: "SÃO LUÍS",      uf: "MA" },
+    { codigo: "1960",  cnpj: "05442121000298", localidade: "BACABAL",        uf: "MA" },
+    { codigo: "4756",  cnpj: "09597026000133", localidade: "MACAPÁ",         uf: "AP" },
+    { codigo: "4730",  cnpj: "05285816000122", localidade: "TERESINA",       uf: "PI" },
+    { codigo: "4730F", cnpj: "05285816000394", localidade: "URUÇUÍ",         uf: "PI" },
+    { codigo: "1928",  cnpj: "07811058000326", localidade: "SINOP",           uf: "MT" },
+    { codigo: "4738",  cnpj: "07811058000164", localidade: "CUIABÁ",          uf: "MT" },
+    { codigo: "4774",  cnpj: "07811058000245", localidade: "RONDONÓPOLIS",    uf: "MT" },
+    { codigo: "4977",  cnpj: "84652296000115", localidade: "PORTO VELHO",     uf: "RO" },
+    { codigo: "4977F", cnpj: "84652296000620", localidade: "JI-PARANÁ",       uf: "RO" },
+    { codigo: "1970",  cnpj: "84652296000204", localidade: "VILHENA",         uf: "RO" }
+  ];
+
+  /*
+   * Contas que já existem no Firebase Authentication.
+   * O administrador pode executar a sincronização automática para criar/corrigir
+   * os documentos correspondentes na coleção users e todas as filiais em branches.
+   */
+  const FIREBASE_USERS_SEED = [
+    { uid: "ysasHWJjtbRCLvV64veCiWUmw9g2", email: "pabriciolima@grupomonaco.com.br", name: "Pabricio Lima", role: "admin", branchCode: "", branchName: "" },
+    { uid: "ipHEeiJyFqYNHjIAN9xYZ06IZJu1", email: "abel@grupomonaco.com.br", name: "Abel Junior", role: "admin", branchCode: "", branchName: "" },
+
+    { uid: "cIPaV0cCgfVscNJdOX7i0LFHVS82", email: "4700@acesso.grupomonaco.com.br", name: "Operador Belém", role: "operador", branchCode: "4700", branchName: "BELÉM" },
+    { uid: "FKF6zd1uHLcTilocSLLDUpB3Pjg1", email: "4731@acesso.grupomonaco.com.br", name: "Operador São Luís", role: "operador", branchCode: "4731", branchName: "SÃO LUÍS" },
+    { uid: "Rg2urCHcbYPwnt0EYmszJ5WkAwD3", email: "1960@acesso.grupomonaco.com.br", name: "Operador Bacabal", role: "operador", branchCode: "1960", branchName: "BACABAL" },
+    { uid: "lfGffKiqvbccVzabiB15CjeJ9c92", email: "4756@acesso.grupomonaco.com.br", name: "Operador Macapá", role: "operador", branchCode: "4756", branchName: "MACAPÁ" },
+    { uid: "QGFyOnomVaaTmAVcEvU7Zotxzny1", email: "4730@acesso.grupomonaco.com.br", name: "Operador Teresina", role: "operador", branchCode: "4730", branchName: "TERESINA" },
+    { uid: "JZF5S89j8xRpgKIldHi07byp9oG2", email: "4730f@acesso.grupomonaco.com.br", name: "Operador Uruçuí", role: "operador", branchCode: "4730F", branchName: "URUÇUÍ" },
+    { uid: "pxgxz4IWaEX4oxl8ooyhwvUG45x2", email: "1928@acesso.grupomonaco.com.br", name: "Operador Sinop", role: "operador", branchCode: "1928", branchName: "SINOP" },
+    { uid: "Q1LYSXjOJBNoGpY4wc7Gm8m1Y643", email: "4738@acesso.grupomonaco.com.br", name: "Operador Cuiabá", role: "operador", branchCode: "4738", branchName: "CUIABÁ" },
+    { uid: "UH68ZaHHIlPISy58c7ulJ9tZrVS2", email: "4774@acesso.grupomonaco.com.br", name: "Operador Rondonópolis", role: "operador", branchCode: "4774", branchName: "RONDONÓPOLIS" },
+    { uid: "BQyz8DmvowSCAdnfSps61JmXqW", email: "4977@acesso.grupomonaco.com.br", name: "Operador Porto Velho", role: "operador", branchCode: "4977", branchName: "PORTO VELHO" },
+    { uid: "Mi2fXm5V54bxYEuB78g9qpfYqDS2", email: "4977f@acesso.grupomonaco.com.br", name: "Operador Ji-Paraná", role: "operador", branchCode: "4977F", branchName: "JI-PARANÁ" },
+    { uid: "Xs1UympDM5PKJoDBJggyitPy3kn2", email: "1970@acesso.grupomonaco.com.br", name: "Operador Vilhena", role: "operador", branchCode: "1970", branchName: "VILHENA" }
   ];
 
   const state = {
@@ -40,6 +70,35 @@
   const fmtMoney = value => new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(Number(value || 0));
   const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const normalize = value => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+
+
+  const firestoreNow = () => firebase.firestore.FieldValue.serverTimestamp();
+  const toIso = value => {
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (value?.toDate) return value.toDate().toISOString();
+    if (value instanceof Date) return value.toISOString();
+    return String(value);
+  };
+  const branchByName = name => FILIAIS.find(f => normalize(f.localidade) === normalize(name));
+  const branchByCode = code => FILIAIS.find(f => String(f.codigo).toUpperCase() === String(code || "").toUpperCase());
+  const normalizeItemCode = value => String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const makeItemId = (branchCode, code) => `${String(branchCode || "").toUpperCase()}_${normalizeItemCode(code)}`;
+  const dataUrlSize = dataUrl => {
+    const base64 = String(dataUrl || "").split(",")[1] || "";
+    return Math.max(0, Math.floor(base64.length * 0.75));
+  };
+  const fileToDataUrl = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`Não foi possível ler o arquivo ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+  const snapshotRows = snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  const sortNewest = (a, b) => {
+    const dateCompare = String(b.data_movimento || "").localeCompare(String(a.data_movimento || ""));
+    return dateCompare || String(b.created_at || "").localeCompare(String(a.created_at || ""));
+  };
 
   function toast(message, type = "success", title = type === "success" ? "Tudo certo" : "Atenção") {
     const el = document.createElement("div");
@@ -73,22 +132,19 @@
     }
 
     if (!configured) {
-      $("#authMessage").textContent = "Configure sua URL e Publishable Key no arquivo config.js.";
+      $("#authMessage").textContent = "Firebase não configurado. Confira o arquivo firebase-config.js.";
       return;
     }
 
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) await enterApp(session);
-
-    sb.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session && !state.session) await enterApp(session);
-      if (event === "SIGNED_OUT") leaveApp();
+    auth.onAuthStateChanged(async user => {
+      if (user && !state.session) await enterApp(user);
+      if (!user && state.session) leaveApp();
     });
   }
 
   function bindUI() {
     $("#loginForm").addEventListener("submit", login);
-    $("#logoutButton").addEventListener("click", () => sb?.auth.signOut());
+    $("#logoutButton").addEventListener("click", () => auth?.signOut());
     $("#menuButton").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
 
     $$(".nav-item").forEach(btn => btn.addEventListener("click", () => showView(btn.dataset.view)));
@@ -104,6 +160,7 @@
     $("#entryItemMode").addEventListener("change", updateEntryMode);
     $("#entryFilialSelect").addEventListener("change", () => { updateEntryCnpj(); suggestExistingEntryItem(); });
     $("#entryCnpjEmitente").addEventListener("input", formatCnpjEmitente);
+    $("#entryCnpjInput").addEventListener("input", formatCnpjEmitente);
 
     ["itemSearch","itemBranchFilter","itemStatusFilter"].forEach(id => $(`#${id}`).addEventListener("input", renderItems));
     ["entrySearch","entryStartDate","entryEndDate"].forEach(id => $(`#${id}`).addEventListener("input", renderEntries));
@@ -137,8 +194,8 @@
     const message = $("#authMessage");
     const button = $("#loginButton");
 
-    if (!sb) {
-      if (message) message.textContent = "Supabase não configurado. Confira o arquivo config.js.";
+    if (!auth) {
+      if (message) message.textContent = "Firebase não configurado. Confira firebase-config.js.";
       return;
     }
 
@@ -159,49 +216,116 @@
     if (message) message.textContent = "";
 
     try {
-      const { data, error } = await sb.auth.signInWithPassword({
-        email,
-        password: senhaInformada
-      });
-
-      if (error) throw error;
-      if (!data?.session) throw new Error("A autenticação não retornou uma sessão válida.");
-
-      await enterApp(data.session);
+      const credential = await auth.signInWithEmailAndPassword(email, senhaInformada);
+      if (!credential?.user) throw new Error("A autenticação não retornou um usuário válido.");
+      await enterApp(credential.user);
     } catch (error) {
       console.error("Falha no login:", error);
-      if (message) message.textContent = translateError(error?.message || "Falha ao entrar no sistema.");
+      if (message) message.textContent = translateError(error?.code || error?.message || "Falha ao entrar no sistema.");
     } finally {
       setLoading(button, false);
     }
   }
 
-  async function enterApp(session) {
-    state.session = session;
-    const { data: profile, error } = await sb.from("profiles").select("*").eq("id", session.user.id).single();
-    if (error) {
-      $("#authMessage").textContent = "Seu usuário existe, mas o perfil não foi encontrado. Execute novamente o SQL do projeto.";
-      await sb.auth.signOut();
-      return;
-    }
-    if (!profile.ativo) {
-      $("#authMessage").textContent = "Este usuário está inativo.";
-      await sb.auth.signOut();
+  async function enterApp(user) {
+    if (state.session?.user?.uid === user.uid && state.profile) return;
+
+    const profileDoc = await db.collection("users").doc(user.uid).get();
+    if (!profileDoc.exists) {
+      $("#authMessage").textContent = "Seu usuário existe no Authentication, mas o perfil não foi encontrado na coleção users.";
+      await auth.signOut();
       return;
     }
 
-    state.profile = profile;
+    const raw = profileDoc.data();
+    if (raw.active === false) {
+      $("#authMessage").textContent = "Este usuário está inativo.";
+      await auth.signOut();
+      return;
+    }
+
+    state.session = { user };
+    state.profile = {
+      id: user.uid,
+      nome: raw.name || raw.nome || user.email,
+      email: raw.email || user.email,
+      role: String(raw.role || "").trim().toLowerCase(),
+      filial: raw.branchName || raw.filial || "",
+      filial_slug: normalize(raw.branchName || raw.filial || "diretoria").replace(/\s+/g, "-"),
+      codigo_login: raw.branchCode || raw.codigo_login || "",
+      branchCode: raw.branchCode || raw.codigo_login || "",
+      branchName: raw.branchName || raw.filial || "",
+      ativo: raw.active !== false
+    };
+
     $("#authScreen").classList.add("hidden");
     $("#appShell").classList.remove("hidden");
-    $("#userName").textContent = profile.nome || session.user.email;
-    $("#userRole").textContent = roleName(profile.role);
-    $("#userInitials").textContent = initials(profile.nome || session.user.email);
+    $("#userName").textContent = state.profile.nome;
+    $("#userRole").textContent = roleName(state.profile.role);
+    $("#userInitials").textContent = initials(state.profile.nome);
 
     applyRolePermissions();
+
+    if (state.profile.role === "admin") {
+      await synchronizeFirebaseStructure();
+    }
+
     configureBranchFields();
     configureEntryBranchFields();
     updateEntryMode();
     await loadAll();
+  }
+
+
+  async function synchronizeFirebaseStructure(showSuccess = false) {
+    if (!db || state.profile?.role !== "admin") return;
+
+    try {
+      const batch = db.batch();
+
+      FILIAIS.forEach(branch => {
+        const ref = db.collection("branches").doc(branch.codigo);
+        batch.set(ref, {
+          code: branch.codigo,
+          codigo: branch.codigo,
+          name: branch.localidade,
+          localidade: branch.localidade,
+          cnpj: branch.cnpj,
+          uf: branch.uf,
+          active: true,
+          ativa: true,
+          updatedAt: firestoreNow()
+        }, { merge: true });
+      });
+
+      FIREBASE_USERS_SEED.forEach(user => {
+        const ref = db.collection("users").doc(user.uid);
+        batch.set(ref, {
+          name: user.name,
+          nome: user.name,
+          email: user.email,
+          role: user.role,
+          branchCode: user.branchCode,
+          branchName: user.branchName,
+          active: true,
+          ativo: true,
+          updatedAt: firestoreNow()
+        }, { merge: true });
+      });
+
+      await batch.commit();
+
+      if (showSuccess) {
+        toast("Todas as filiais e perfis de acesso foram sincronizados.");
+      }
+    } catch (error) {
+      console.error("Falha ao sincronizar a estrutura do Firebase:", error);
+      toast(
+        translateError(error.code || error.message),
+        "error",
+        "Cadastros não sincronizados"
+      );
+    }
   }
 
   function leaveApp() {
@@ -243,7 +367,7 @@
       select.value = selectedBranch;
     }
 
-    select.disabled = true;
+    select.disabled = !isGlobalAccess();
     updateItemCnpj();
   }
 
@@ -273,8 +397,11 @@
   }
 
   function updateEntryCnpj() {
-    const filial = FILIAIS.find(f => f.localidade === $("#entryFilialSelect").value);
-    $("#entryCnpjInput").value = filial?.cnpj || "";
+    const filial = branchByName($("#entryFilialSelect").value);
+    const input = $("#entryCnpjInput");
+    input.value = filial?.cnpj
+      ? formatCnpjValue(filial.cnpj)
+      : "";
   }
 
   function updateEntryMode() {
@@ -294,24 +421,106 @@
 
   async function loadAll() {
     try {
-      const [itemsRes, movesRes, attachRes] = await Promise.all([
-        sb.from("vw_estoque_atual").select("*").order("descricao"),
-        sb.from("movimentacoes").select("*, itens(codigo,descricao,filial,localizacao)").order("data_movimento",{ascending:false}).order("created_at",{ascending:false}),
-        sb.from("anexos").select("*, movimentacoes(numero_nota,numero_rem,numero_os,item_id,itens(codigo,descricao))").order("created_at",{ascending:false})
-      ]);
-      if (itemsRes.error) throw itemsRes.error;
-      if (movesRes.error) throw movesRes.error;
-      if (attachRes.error) throw attachRes.error;
+      const ownBranch = state.profile?.branchCode;
+      const globalAccess = isGlobalAccess();
 
-      state.items = itemsRes.data || [];
-      state.movements = movesRes.data || [];
-      state.attachments = attachRes.data || [];
+      let itemQuery = db.collection("items");
+      let movementQuery = db.collection("movements");
+      let attachmentQuery = db.collection("attachments");
+
+      if (!globalAccess) {
+        itemQuery = itemQuery.where("branchCode", "==", ownBranch);
+        movementQuery = movementQuery.where("branchCode", "==", ownBranch);
+        attachmentQuery = attachmentQuery.where("branchCode", "==", ownBranch);
+      }
+
+      const [itemSnap, movementSnap, attachmentSnap] = await Promise.all([
+        itemQuery.get(), movementQuery.get(), attachmentQuery.get()
+      ]);
+
+      state.items = snapshotRows(itemSnap).map(item => ({
+        ...item,
+        codigo: item.codigo || item.code || "",
+        descricao: item.descricao || item.description || "",
+        filial: item.filial || item.branchName || "",
+        filial_codigo: item.filial_codigo || item.branchCode || "",
+        dn: item.dn || item.cnpj || "",
+        localizacao: item.localizacao || item.location || "",
+        estoque_minimo: Number(item.estoque_minimo || 0),
+        valor_unitario: Number(item.valor_unitario || 0),
+        saldo: Number(item.saldo ?? item.balance ?? 0),
+        created_at: toIso(item.created_at || item.createdAt),
+        updated_at: toIso(item.updated_at || item.updatedAt)
+      })).sort((a,b) => String(a.descricao).localeCompare(String(b.descricao), "pt-BR"));
+
+      const itemMap = new Map(state.items.map(item => [item.id, item]));
+      state.movements = snapshotRows(movementSnap).map(movement => ({
+        ...movement,
+        item_id: movement.item_id || movement.itemId,
+        tipo: movement.tipo || movement.type,
+        quantidade: Number(movement.quantidade ?? movement.quantity ?? 0),
+        data_movimento: movement.data_movimento || movement.movementDate || "",
+        created_at: toIso(movement.created_at || movement.createdAt),
+        signed_at: toIso(movement.signed_at || movement.signedAt),
+        itens: itemMap.get(movement.item_id || movement.itemId) || {
+          codigo: movement.item_codigo || movement.itemCode || "",
+          descricao: movement.item_descricao || movement.itemDescription || "",
+          filial: movement.filial || movement.branchName || "",
+          localizacao: movement.localizacao || movement.location || ""
+        }
+      })).sort(sortNewest);
+
+      const movementMap = new Map(state.movements.map(m => [m.id, m]));
+      const physicalAttachments = snapshotRows(attachmentSnap).map(attachment => {
+        const movement = movementMap.get(attachment.movimentacao_id || attachment.movementId);
+        return {
+          ...attachment,
+          movimentacao_id: attachment.movimentacao_id || attachment.movementId,
+          tipo_movimento: attachment.tipo_movimento || attachment.movementType,
+          nome_arquivo: attachment.nome_arquivo || attachment.fileName || "Documento",
+          mime_type: attachment.mime_type || attachment.mimeType || "application/octet-stream",
+          tamanho_bytes: Number(attachment.tamanho_bytes || attachment.sizeBytes || 0),
+          data_url: attachment.data_url || attachment.dataUrl || "",
+          created_at: toIso(attachment.created_at || attachment.createdAt),
+          movimentacoes: movement ? {
+            numero_nota: movement.numero_nota,
+            numero_rem: movement.numero_rem,
+            numero_os: movement.numero_os,
+            item_id: movement.item_id,
+            itens: movement.itens
+          } : null
+        };
+      });
+
+      const virtualSignatures = state.movements
+        .filter(m => m.tipo === "saida" && m.signature_data && m.signature_locked === true)
+        .map(m => ({
+          id: `signature:${m.id}`,
+          movimentacao_id: m.id,
+          tipo_movimento: "saida",
+          nome_arquivo: `ROMANEIO_ASSINADO_${romaneioNumber(m)}_DIGITAL.webp`,
+          mime_type: "image/webp",
+          tamanho_bytes: dataUrlSize(m.signature_data),
+          created_at: m.signed_at || m.created_at,
+          virtual_signature: true,
+          movimentacoes: {
+            numero_nota: m.numero_nota,
+            numero_rem: m.numero_rem,
+            numero_os: m.numero_os,
+            item_id: m.item_id,
+            itens: m.itens
+          }
+        }));
+
+      state.attachments = [...virtualSignatures, ...physicalAttachments]
+        .sort((a,b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
 
       fillSelects();
       renderAll();
-      $("#lastUpdate").textContent = new Intl.DateTimeFormat("pt-BR",{dateStyle:"short",timeStyle:"short"}).format(new Date());
+      $("#lastUpdate").textContent = new Intl.DateTimeFormat("pt-BR", {dateStyle:"short",timeStyle:"short"}).format(new Date());
     } catch (error) {
-      toast(translateError(error.message), "error", "Erro ao carregar");
+      console.error(error);
+      toast(translateError(error.code || error.message), "error", "Erro ao carregar");
     }
   }
 
@@ -528,45 +737,50 @@
     const data = new FormData(event.target);
     const itemId = data.get("id");
 
-    if (!itemId) {
-      return toast("Item não identificado para edição.", "error", "Não foi possível salvar");
-    }
+    if (!itemId) return toast("Item não identificado para edição.", "error", "Não foi possível salvar");
+
+    const item = state.items.find(i => i.id === itemId);
+    if (!item) return toast("Item não encontrado.", "error");
 
     setLoading(button, true, "Salvando...");
-
-    const { error } = await sb.rpc("editar_item_estoque", {
-      p_item_id: itemId,
-      p_codigo: data.get("codigo")?.trim(),
-      p_descricao: data.get("descricao")?.trim(),
-      p_categoria: data.get("categoria"),
-      p_marca: data.get("marca")?.trim(),
-      p_localizacao: data.get("localizacao")?.trim(),
-      p_status: data.get("status"),
-      p_observacoes: data.get("observacoes")?.trim()
-    });
-
-    setLoading(button, false);
-
-    if (error) {
-      return toast(translateError(error.message), "error", "Item não atualizado");
+    try {
+      await db.collection("items").doc(itemId).update({
+        codigo: normalizeItemCode(data.get("codigo")),
+        code: normalizeItemCode(data.get("codigo")),
+        descricao: String(data.get("descricao") || "").trim(),
+        description: String(data.get("descricao") || "").trim(),
+        categoria: data.get("categoria") || "REM - Garantia S/R",
+        marca: String(data.get("marca") || "").trim(),
+        localizacao: String(data.get("localizacao") || "").trim(),
+        location: String(data.get("localizacao") || "").trim(),
+        status: data.get("status") || "disponivel",
+        observacoes: String(data.get("observacoes") || "").trim(),
+        updatedAt: firestoreNow(),
+        updated_at: firestoreNow()
+      });
+      closeModals();
+      toast("Item atualizado com sucesso.");
+      await loadAll();
+    } catch (error) {
+      toast(translateError(error.code || error.message), "error", "Item não atualizado");
+    } finally {
+      setLoading(button, false);
     }
-
-    closeModals();
-    toast("Item atualizado com sucesso.");
-    await loadAll();
   }
 
 
+
+  function formatCnpjValue(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 14);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0,2)}.${digits.slice(2)}`;
+    if (digits.length <= 8) return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5)}`;
+    if (digits.length <= 12) return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8)}`;
+    return `${digits.slice(0,2)}.${digits.slice(2,5)}.${digits.slice(5,8)}/${digits.slice(8,12)}-${digits.slice(12)}`;
+  }
+
   function formatCnpjEmitente(event) {
-    const digits = event.target.value.replace(/\D/g, "").slice(0, 14);
-    let formatted = digits;
-
-    if (digits.length > 2) formatted = `${digits.slice(0,2)}.${digits.slice(2)}`;
-    if (digits.length > 5) formatted = `${formatted.slice(0,6)}.${formatted.slice(6)}`;
-    if (digits.length > 8) formatted = `${formatted.slice(0,10)}/${formatted.slice(10)}`;
-    if (digits.length > 12) formatted = `${formatted.slice(0,15)}-${formatted.slice(15)}`;
-
-    event.target.value = formatted;
+    event.target.value = formatCnpjValue(event.target.value);
   }
 
   function validarCnpjBasico(cnpj) {
@@ -577,63 +791,128 @@
     event.preventDefault();
     const button = event.submitter;
     const data = new FormData(event.target);
-    const files = [...$("#entryFiles").files];
+    const files = [...($("#entryFiles")?.files || [])];
     if (!validateFiles(files)) return;
 
     const isNew = data.get("item_mode") === "novo";
+    const cnpjEmitente = String(data.get("cnpj_emitente") || "").replace(/\D/g, "");
+    if (!validarCnpjBasico(cnpjEmitente)) return toast("Informe um CNPJ do emitente com 14 números.", "error", "CNPJ inválido");
+
+    const quantity = Number(data.get("quantidade"));
+    if (!Number.isInteger(quantity) || quantity <= 0) return toast("Informe uma quantidade maior que zero.", "error", "Quantidade inválida");
+
+    let itemId;
+    let selectedBranch;
+    let newItemData = null;
+
     if (isNew) {
-      const duplicate = findExistingEntryItem(data.get("novo_codigo"), getEntrySelectedBranch());
+      selectedBranch = branchByName(getEntrySelectedBranch());
+      if (!selectedBranch) return toast("Selecione a filial do item.", "error", "Filial obrigatória");
+
+      const branchCnpj = String(data.get("novo_cnpj") || "").replace(/\D/g, "");
+      if (!validarCnpjBasico(branchCnpj)) {
+        return toast("Informe o CNPJ da filial com 14 números.", "error", "CNPJ da filial inválido");
+      }
+
+      const code = normalizeItemCode(data.get("novo_codigo"));
+      const duplicate = findExistingEntryItem(code, selectedBranch.localidade);
       if (duplicate) {
         applyExistingItemSuggestion(duplicate);
-        return toast(`O item ${duplicate.codigo} já possui cadastro nesta filial. Ele foi selecionado como sugestão; confirme a entrada no cadastro existente.`, "error", "Item já cadastrado");
+        return toast(`O item ${duplicate.codigo} já possui cadastro nesta filial. O cadastro existente foi selecionado.`, "error", "Item já cadastrado");
       }
+      itemId = makeItemId(selectedBranch.codigo, code);
+      newItemData = {
+        codigo: code, code,
+        descricao: String(data.get("novo_descricao") || "").trim(),
+        description: String(data.get("novo_descricao") || "").trim(),
+        categoria: data.get("novo_categoria") || "REM - Garantia S/R",
+        marca: String(data.get("novo_marca") || "").trim(),
+        filial: selectedBranch.localidade,
+        branchName: selectedBranch.localidade,
+        filial_codigo: selectedBranch.codigo,
+        branchCode: selectedBranch.codigo,
+        dn: branchCnpj,
+        cnpj: branchCnpj,
+        localizacao: String(data.get("novo_localizacao") || "").trim(),
+        location: String(data.get("novo_localizacao") || "").trim(),
+        saldo: quantity,
+        balance: quantity,
+        estoque_minimo: 0,
+        valor_unitario: 0,
+        status: "disponivel",
+        observacoes: "",
+        createdBy: state.session.user.uid,
+        createdAt: firestoreNow(),
+        created_at: firestoreNow(),
+        updatedAt: firestoreNow(),
+        updated_at: firestoreNow()
+      };
+      if (!newItemData.codigo || !newItemData.descricao || !newItemData.localizacao) {
+        return toast("Preencha código, descrição e localização do novo item.", "error", "Dados incompletos");
+      }
+    } else {
+      itemId = String(data.get("item_id") || "");
+      if (!itemId) return toast("Selecione o item já cadastrado.", "error", "Item obrigatório");
     }
-    const cnpjEmitente = data.get("cnpj_emitente")?.replace(/\D/g, "") || "";
-
-    if (!validarCnpjBasico(cnpjEmitente)) {
-      return toast("Informe um CNPJ do emitente com 14 números.", "error", "CNPJ inválido");
-    }
-
-    const branchSelect = $("#entryFilialSelect");
-    const wasDisabled = branchSelect.disabled;
-    if (wasDisabled) branchSelect.disabled = false;
-
-    const filial = isNew
-      ? branchSelect.value
-      : null;
-
-    if (wasDisabled) branchSelect.disabled = true;
 
     setLoading(button, true, isNew ? "Criando item e entrada..." : "Registrando entrada...");
+    let movementId = null;
 
     try {
-      const { data: result, error } = await sb.rpc("registrar_entrada_inteligente", {
-        p_item_id: isNew ? null : data.get("item_id"),
-        p_codigo: isNew ? data.get("novo_codigo")?.trim() : null,
-        p_descricao: isNew ? data.get("novo_descricao")?.trim() : null,
-        p_categoria: isNew ? data.get("novo_categoria") : null,
-        p_marca: isNew ? data.get("novo_marca")?.trim() : null,
-        p_filial: isNew ? filial : null,
-        p_dn: isNew ? data.get("novo_cnpj") : null,
-        p_localizacao: isNew ? data.get("novo_localizacao")?.trim() : null,
-        p_estoque_minimo: 0,
-        p_valor_unitario: 0,
-        p_quantidade: Number(data.get("quantidade")),
-        p_data_movimento: data.get("data_movimento"),
-        p_cnpj_emitente: data.get("cnpj_emitente")?.replace(/\D/g, "") || null,
-        p_natureza_operacao: data.get("natureza_operacao"),
-        p_numero_nota: data.get("numero_nota"),
-        p_numero_rem: data.get("numero_rem"),
-        p_responsavel: data.get("responsavel"),
-        p_observacoes: data.get("observacoes")
+      await db.runTransaction(async transaction => {
+        const itemRef = db.collection("items").doc(itemId);
+        const itemSnap = await transaction.get(itemRef);
+
+        if (isNew && itemSnap.exists) throw new Error("ITEM_DUPLICADO");
+        if (!isNew && !itemSnap.exists) throw new Error("ITEM_NAO_ENCONTRADO");
+
+        let itemData;
+        if (isNew) {
+          itemData = newItemData;
+          transaction.set(itemRef, itemData);
+        } else {
+          const current = itemSnap.data();
+          const currentBalance = Number(current.saldo ?? current.balance ?? 0);
+          itemData = current;
+          transaction.update(itemRef, {
+            saldo: currentBalance + quantity,
+            balance: currentBalance + quantity,
+            updatedAt: firestoreNow(),
+            updated_at: firestoreNow()
+          });
+        }
+
+        const movementRef = db.collection("movements").doc();
+        movementId = movementRef.id;
+        transaction.set(movementRef, {
+          tipo: "entrada", type: "entrada",
+          item_id: itemId, itemId,
+          item_codigo: itemData.codigo || itemData.code,
+          itemCode: itemData.codigo || itemData.code,
+          item_descricao: itemData.descricao || itemData.description,
+          itemDescription: itemData.descricao || itemData.description,
+          filial: itemData.filial || itemData.branchName,
+          branchName: itemData.filial || itemData.branchName,
+          filial_codigo: itemData.filial_codigo || itemData.branchCode,
+          branchCode: itemData.filial_codigo || itemData.branchCode,
+          localizacao: itemData.localizacao || itemData.location,
+          location: itemData.localizacao || itemData.location,
+          quantidade: quantity, quantity,
+          data_movimento: data.get("data_movimento"), movementDate: data.get("data_movimento"),
+          cnpj_emitente: cnpjEmitente,
+          natureza_operacao: String(data.get("natureza_operacao") || "").trim(),
+          numero_nota: String(data.get("numero_nota") || "").trim(),
+          numero_rem: String(data.get("numero_rem") || "").trim(),
+          responsavel: String(data.get("responsavel") || "").trim(),
+          observacoes: String(data.get("observacoes") || "").trim(),
+          status: "ativo",
+          criado_por: state.session.user.uid,
+          createdBy: state.session.user.uid,
+          createdAt: firestoreNow(), created_at: firestoreNow()
+        });
       });
 
-      if (error) throw error;
-
-      const movementId = result?.movimentacao_id;
-      if (!movementId) throw new Error("A entrada foi processada, mas o identificador da movimentação não foi retornado.");
-
-      await uploadFiles(files, movementId, "entrada");
+      if (files.length) await uploadFiles(files, movementId, "entrada");
 
       event.target.reset();
       event.target.item_mode.value = "novo";
@@ -642,15 +921,15 @@
       configureEntryBranchFields();
       updateEntryMode();
       closeModals();
-
-      toast(
-        result?.item_criado
-          ? "Novo item criado e entrada registrada com sucesso."
-          : "O código já existia nesta filial. A entrada foi adicionada ao cadastro existente."
-      );
+      toast(isNew ? "Novo item criado e entrada registrada com sucesso." : "Entrada registrada no item existente.");
       await loadAll();
     } catch (error) {
-      toast(translateError(error.message), "error", "Erro na entrada");
+      console.error(error);
+      if (String(error.message).includes("ITEM_DUPLICADO")) {
+        const duplicate = findExistingEntryItem(data.get("novo_codigo"), selectedBranch?.localidade);
+        if (duplicate) applyExistingItemSuggestion(duplicate);
+      }
+      toast(translateError(error.code || error.message), "error", "Erro na entrada");
     } finally {
       setLoading(button, false);
     }
@@ -662,49 +941,78 @@
     const data = new FormData(event.target);
     const receiverName = String(data.get("recebedor_nome") || "").trim();
     const receiverDocument = String(data.get("recebedor_documento") || "").trim();
+    const itemId = String(data.get("item_id") || "");
+    const quantity = Number(data.get("quantidade"));
 
-    if (!receiverName || !receiverDocument) {
-      return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
-    }
-    if (!signatureHasInk) {
-      return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
-    }
-    if (!$("#signatureConsent")?.checked) {
-      return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
-    }
+    if (!itemId) return toast("Selecione o item.", "error", "Item obrigatório");
+    if (!Number.isInteger(quantity) || quantity <= 0) return toast("Informe uma quantidade maior que zero.", "error", "Quantidade inválida");
+    if (!receiverName || !receiverDocument) return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
+    if (!signatureHasInk) return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
+    if (!$("#signatureConsent")?.checked) return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
 
     setLoading(button, true, "Salvando saída e assinatura...");
 
     try {
-      const { data: result, error } = await sb.rpc("registrar_saida", {
-        p_item_id:data.get("item_id"), p_quantidade:Number(data.get("quantidade")),
-        p_data_movimento:data.get("data_movimento"), p_finalidade:data.get("finalidade"),
-        p_numero_os:data.get("numero_os"), p_chassi:data.get("chassi"),
-        p_placa:data.get("placa"), p_cliente:data.get("cliente"),
-        p_solicitante:data.get("solicitante"), p_autorizado_por:data.get("autorizado_por"),
-        p_observacoes:data.get("observacoes")
+      const signatureData = await compressSignatureDataUrl();
+      let movementId = null;
+
+      await db.runTransaction(async transaction => {
+        const itemRef = db.collection("items").doc(itemId);
+        const itemSnap = await transaction.get(itemRef);
+        if (!itemSnap.exists) throw new Error("ITEM_NAO_ENCONTRADO");
+
+        const item = itemSnap.data();
+        const currentBalance = Number(item.saldo ?? item.balance ?? 0);
+        if (currentBalance < quantity) throw new Error(`Saldo insuficiente. Disponível: ${currentBalance}, solicitado: ${quantity}.`);
+        if ((item.status || "disponivel") !== "disponivel") throw new Error("O item está bloqueado ou arquivado.");
+
+        const movementRef = db.collection("movements").doc();
+        movementId = movementRef.id;
+
+        transaction.update(itemRef, {
+          saldo: currentBalance - quantity,
+          balance: currentBalance - quantity,
+          updatedAt: firestoreNow(), updated_at: firestoreNow()
+        });
+
+        transaction.set(movementRef, {
+          tipo: "saida", type: "saida",
+          item_id: itemId, itemId,
+          item_codigo: item.codigo || item.code,
+          itemCode: item.codigo || item.code,
+          item_descricao: item.descricao || item.description,
+          itemDescription: item.descricao || item.description,
+          filial: item.filial || item.branchName,
+          branchName: item.filial || item.branchName,
+          filial_codigo: item.filial_codigo || item.branchCode,
+          branchCode: item.filial_codigo || item.branchCode,
+          localizacao: item.localizacao || item.location,
+          location: item.localizacao || item.location,
+          quantidade: quantity, quantity,
+          data_movimento: data.get("data_movimento"), movementDate: data.get("data_movimento"),
+          finalidade: String(data.get("finalidade") || "").trim(),
+          numero_os: String(data.get("numero_os") || "").trim(),
+          chassi: String(data.get("chassi") || "").trim(),
+          placa: String(data.get("placa") || "").trim(),
+          cliente: String(data.get("cliente") || "").trim(),
+          solicitante: String(data.get("solicitante") || "").trim(),
+          autorizado_por: String(data.get("autorizado_por") || "").trim(),
+          requisitado_por: String(data.get("autorizado_por") || "").trim(),
+          observacoes: String(data.get("observacoes") || "").trim(),
+          recebedor_nome: receiverName,
+          receiverName,
+          recebedor_documento: receiverDocument,
+          receiverDocument,
+          signature_data: signatureData,
+          signatureData,
+          signature_locked: true,
+          signatureLocked: true,
+          signed_at: firestoreNow(), signedAt: firestoreNow(),
+          status: "ativo",
+          criado_por: state.session.user.uid, createdBy: state.session.user.uid,
+          createdAt: firestoreNow(), created_at: firestoreNow()
+        });
       });
-      if (error) throw error;
-
-      const movementId = typeof result === "object" && result !== null
-        ? result.movimentacao_id || result.id
-        : result;
-      if (!movementId) throw new Error("A saída foi processada, mas o identificador da movimentação não foi retornado.");
-
-      const item = state.items.find(i => i.id === data.get("item_id"));
-      const movementForDocument = {
-        id: movementId, tipo: "saida", data_movimento: data.get("data_movimento"),
-        quantidade: Number(data.get("quantidade")), finalidade: data.get("finalidade"),
-        numero_os: data.get("numero_os"), chassi: data.get("chassi"), placa: data.get("placa"),
-        cliente: data.get("cliente"), solicitante: data.get("solicitante"),
-        autorizado_por: data.get("autorizado_por"), observacoes: data.get("observacoes"),
-        itens: item
-      };
-
-      const signatureDataUrl = $("#signatureCanvas").toDataURL("image/png");
-      const svg = buildSignedRomaneioSvg(movementForDocument, receiverName, receiverDocument, signatureDataUrl);
-      const file = await svgToPngFile(svg, `ROMANEIO_ASSINADO_${romaneioNumber(movementForDocument)}_DIGITAL.png`);
-      await uploadFiles([file], movementId, "saida");
 
       event.target.reset();
       setDefaultDates();
@@ -715,35 +1023,64 @@
       toast("Saída e romaneio digital assinado foram salvos definitivamente.");
     } catch (error) {
       console.error(error);
-      toast(translateError(error.message), "error", "Saída não registrada");
+      toast(translateError(error.code || error.message), "error", "Saída não registrada");
     } finally {
       setLoading(button, false);
     }
   }
 
+  async function compressSignatureDataUrl() {
+    const source = $("#signatureCanvas");
+    const target = document.createElement("canvas");
+    target.width = 600;
+    target.height = 220;
+    const context = target.getContext("2d", { alpha: false });
+    context.fillStyle = "#FFFFFF";
+    context.fillRect(0, 0, target.width, target.height);
+    context.drawImage(source, 0, 0, target.width, target.height);
+    const webp = target.toDataURL("image/webp", 0.72);
+    return webp.startsWith("data:image/webp") ? webp : target.toDataURL("image/jpeg", 0.72);
+  }
+
   async function uploadFiles(files, movementId, type) {
+    let movement = state.movements.find(m => m.id === movementId);
+    if (!movement) {
+      const movementDoc = await db.collection("movements").doc(movementId).get();
+      if (movementDoc.exists) movement = { id: movementDoc.id, ...movementDoc.data() };
+    }
+    const branchCode = movement?.filial_codigo || movement?.branchCode || state.profile?.branchCode || "";
+
     for (const file of files) {
-      const safeName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-zA-Z0-9._-]/g,"_");
-      const filialSlug = state.profile.filial_slug || "diretoria";
-      const path = `${filialSlug}/${state.session.user.id}/${new Date().getFullYear()}/${movementId}/${crypto.randomUUID()}-${safeName}`;
-      const { error: uploadError } = await sb.storage.from(config.STORAGE_BUCKET).upload(path,file,{cacheControl:"3600",upsert:false});
-      if (uploadError) throw uploadError;
-      const { error: dbError } = await sb.from("anexos").insert({
-        movimentacao_id:movementId,tipo_movimento:type,nome_arquivo:file.name,caminho_storage:path,
-        mime_type:file.type,tamanho_bytes:file.size,criado_por:state.session.user.id
-      });
-      if (dbError) {
-        await sb.storage.from(config.STORAGE_BUCKET).remove([path]);
-        throw dbError;
+      const dataUrl = await fileToDataUrl(file);
+      if (dataUrlSize(dataUrl) > 650 * 1024) {
+        throw new Error(`O arquivo ${file.name} ultrapassa o limite seguro de 650 KB do Firestore.`);
       }
+      await db.collection("attachments").add({
+        movimentacao_id: movementId,
+        movementId,
+        tipo_movimento: type,
+        movementType: type,
+        nome_arquivo: file.name,
+        fileName: file.name,
+        mime_type: file.type || "application/octet-stream",
+        mimeType: file.type || "application/octet-stream",
+        tamanho_bytes: file.size,
+        sizeBytes: file.size,
+        data_url: dataUrl,
+        dataUrl,
+        branchCode,
+        criado_por: state.session.user.uid,
+        createdBy: state.session.user.uid,
+        createdAt: firestoreNow(), created_at: firestoreNow()
+      });
     }
   }
 
   function validateFiles(files) {
-    const max = 6 * 1024 * 1024;
+    const max = 650 * 1024;
     const oversized = files.find(f => f.size > max);
     if (oversized) {
-      toast(`O arquivo "${oversized.name}" ultrapassa 6 MB.`,"error","Arquivo muito grande");
+      toast(`O arquivo "${oversized.name}" ultrapassa 650 KB, limite seguro para salvar sem Firebase Storage.`,"error","Arquivo muito grande");
       return false;
     }
     return true;
@@ -752,9 +1089,27 @@
   async function openDocument(id) {
     const attachment = state.attachments.find(a => a.id === id);
     if (!attachment) return;
-    const { data, error } = await sb.storage.from(config.STORAGE_BUCKET).createSignedUrl(attachment.caminho_storage, 120);
-    if (error) return toast(translateError(error.message),"error","Documento indisponível");
-    window.open(data.signedUrl,"_blank","noopener,noreferrer");
+
+    if (attachment.virtual_signature) {
+      const movement = state.movements.find(m => m.id === attachment.movimentacao_id);
+      if (!movement) return toast("Romaneio não encontrado.", "error");
+      const svg = buildSignedRomaneioSvg(
+        movement,
+        movement.recebedor_nome || movement.receiverName || "—",
+        movement.recebedor_documento || movement.receiverDocument || "—",
+        movement.signature_data || movement.signatureData
+      );
+      const url = URL.createObjectURL(new Blob([svg], {type:"image/svg+xml;charset=utf-8"}));
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) toast("Permita a abertura da visualização do romaneio.", "error", "Visualização bloqueada");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+
+    const dataUrl = attachment.data_url || attachment.dataUrl;
+    if (!dataUrl) return toast("Documento sem conteúdo disponível.", "error");
+    const opened = window.open(dataUrl, "_blank", "noopener,noreferrer");
+    if (!opened) toast("Permita a abertura do documento no navegador.", "error", "Visualização bloqueada");
   }
 
   function editItem(id) {
@@ -782,23 +1137,18 @@
     const item = state.items.find(i => i.id === id);
     if (!item) return toast("Item não encontrado.", "error");
 
-    const confirmed = window.confirm(
-      `Excluir o item ${item.codigo} — ${item.descricao}?\n\n` +
-      `A exclusão só será permitida se ele nunca tiver recebido entrada, saída ou ajuste.`
-    );
-
+    const confirmed = window.confirm(`Excluir o item ${item.codigo} — ${item.descricao}?\n\nA exclusão só será permitida se ele nunca tiver movimentações.`);
     if (!confirmed) return;
 
-    const { error } = await sb.rpc("excluir_item_estoque", {
-      p_item_id: id
-    });
-
-    if (error) {
-      return toast(translateError(error.message), "error", "Item não excluído");
+    try {
+      const movements = await db.collection("movements").where("itemId", "==", id).limit(1).get();
+      if (!movements.empty) throw new Error("Este item possui movimentações e não pode ser excluído.");
+      await db.collection("items").doc(id).delete();
+      toast("Item excluído com sucesso.");
+      await loadAll();
+    } catch (error) {
+      toast(translateError(error.code || error.message), "error", "Item não excluído");
     }
-
-    toast("Item excluído com sucesso.");
-    await loadAll();
   }
 
   function showItem(id) {
@@ -828,10 +1178,7 @@
   }
 
   function signedRomaneioAttachment(movementId) {
-    return state.attachments.find(a =>
-      a.movimentacao_id === movementId &&
-      normalize(a.nome_arquivo).startsWith("romaneio_assinado_")
-    ) || null;
+    return state.attachments.find(a => a.movimentacao_id === movementId && a.virtual_signature) || null;
   }
 
   function romaneioNumber(movement) {
@@ -1099,65 +1446,10 @@
     });
   }
 
-  async function saveDigitalSignature(event) {
-    event.preventDefault();
-    const button = event.submitter;
-    const movementId = $("#signatureMovementId").value;
-    const movement = state.movements.find(m => m.id === movementId && m.tipo === "saida");
-    const receiverName = $("#signatureReceiverName").value.trim();
-    const receiverDocument = $("#signatureReceiverDocument").value.trim();
-
-    if (!movement) return toast("Saída não encontrada.", "error", "Romaneio indisponível");
-    if (signedRomaneioAttachment(movementId)) {
-      closeModals();
-      return toast("Este romaneio já possui assinatura digital definitiva.", "error", "Assinatura já finalizada");
-    }
-    if (!receiverName || !receiverDocument) return toast("Informe o nome e o CPF ou matrícula de quem recebeu.", "error", "Identificação obrigatória");
-    if (!signatureHasInk) return toast("Peça ao recebedor para assinar no campo indicado.", "error", "Assinatura obrigatória");
-    if (!$("#signatureConsent").checked) return toast("Confirme o recebimento antes de salvar.", "error", "Confirmação obrigatória");
-
-    setLoading(button, true, "Salvando assinatura...");
-    try {
-      const signatureDataUrl = $("#signatureCanvas").toDataURL("image/png");
-      const svg = buildSignedRomaneioSvg(movement, receiverName, receiverDocument, signatureDataUrl);
-      const file = await svgToPngFile(
-        svg,
-        `ROMANEIO_ASSINADO_${romaneioNumber(movement)}_DIGITAL.png`
-      );
-
-      // A assinatura é definitiva: nunca substitua um romaneio já salvo.
-      if (signedRomaneioAttachment(movementId)) {
-        throw new Error("Este romaneio já possui assinatura digital definitiva.");
-      }
-      await uploadFiles([file], movementId, "saida");
-
-      closeModals();
-      toast("Romaneio assinado digitalmente e salvo com sucesso.");
-      await loadAll();
-    } catch (error) {
-      console.error(error);
-      toast(translateError(error.message), "error", "Assinatura não salva");
-    } finally {
-      setLoading(button, false);
-    }
-  }
-
-
   async function deleteAttachment(attachment) {
     if (!attachment) return;
-
-    const { error: storageError } = await sb.storage
-      .from(config.STORAGE_BUCKET)
-      .remove([attachment.caminho_storage]);
-
-    if (storageError) throw storageError;
-
-    const { error: dbError } = await sb
-      .from("anexos")
-      .delete()
-      .eq("id", attachment.id);
-
-    if (dbError) throw dbError;
+    if (attachment.virtual_signature) throw new Error("A assinatura digital é permanente e não pode ser excluída.");
+    await db.collection("attachments").doc(attachment.id).delete();
   }
 
   async function printRomaneio(movementId) {
@@ -2027,10 +2319,17 @@
   }
 
   async function printSignedRomaneioAttachment(attachment) {
-    const { data, error } = await sb.storage
-      .from(config.STORAGE_BUCKET)
-      .createSignedUrl(attachment.caminho_storage, 120);
-    if (error || !data?.signedUrl) return toast("Não foi possível preparar o romaneio assinado para impressão.", "error", "Impressão indisponível");
+    const movement = state.movements.find(m => m.id === attachment.movimentacao_id);
+    if (!movement?.signature_data && !movement?.signatureData) {
+      return toast("Assinatura digital não encontrada.", "error", "Impressão indisponível");
+    }
+
+    const svg = buildSignedRomaneioSvg(
+      movement,
+      movement.recebedor_nome || movement.receiverName || "—",
+      movement.recebedor_documento || movement.receiverDocument || "—",
+      movement.signature_data || movement.signatureData
+    );
 
     const oldFrame = document.getElementById("signedRomaneioPrintFrame");
     oldFrame?.remove();
@@ -2038,11 +2337,15 @@
     frame.id = "signedRomaneioPrintFrame";
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
     document.body.appendChild(frame);
-    const doc = frame.contentDocument || frame.contentWindow?.document;
-    doc.open();
-    doc.write(`<!doctype html><html><head><style>@page{size:A4 portrait;margin:0}html,body{margin:0;width:100%;height:100%}img{display:block;width:100%;height:auto}</style></head><body><img src="${esc(data.signedUrl)}"></body></html>`);
-    doc.close();
-    frame.onload = () => setTimeout(() => { frame.contentWindow.focus(); frame.contentWindow.print(); setTimeout(() => frame.remove(), 1500); }, 250);
+    const frameDoc = frame.contentDocument || frame.contentWindow?.document;
+    frameDoc.open();
+    frameDoc.write(`<!doctype html><html><head><style>@page{size:A4 portrait;margin:0}html,body{margin:0;width:100%;height:100%}svg{display:block;width:100%;height:auto}</style></head><body>${svg}</body></html>`);
+    frameDoc.close();
+    frame.onload = () => setTimeout(() => {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+      setTimeout(() => frame.remove(), 1500);
+    }, 250);
   }
 
   function showView(viewId) {
@@ -2079,21 +2382,21 @@
     return `${(n/Math.pow(1024,i)).toFixed(i?1:0)} ${units[i]}`;
   }
   function translateError(message="") {
-    const m=message.toLowerCase();
-    if(m.includes("invalid login")) return "E-mail ou senha incorretos.";
-    if(m.includes("duplicate key")) return "Já existe um item com este código nesta filial.";
-    if(m.includes("row-level security")) return "Seu perfil não possui permissão para esta operação.";
-    if(m.includes("saldo insuficiente")) return message;
-    if(m.includes("numero da nota")) return "Informe o número da nota.";
-    if(m.includes("dados do novo item")) return "Preencha código, descrição, filial e localização do novo item.";
-    if(m.includes("outra filial")) return "O item informado pertence a outra filial.";
-    if(m.includes("possui movimentacoes") || m.includes("possui movimentações")) return "Este item já possui movimentações e não pode ser excluído. Você pode bloqueá-lo na opção Editar.";
-    if(m.includes("nao encontrado") || m.includes("não encontrado")) return message;
-    if(m.includes("failed to fetch")) return "Não foi possível conectar ao Supabase. Confira a internet e o config.js.";
+    const m = String(message).toLowerCase();
+    if (m.includes("auth/invalid-credential") || m.includes("auth/wrong-password") || m.includes("auth/user-not-found") || m.includes("invalid login")) return "E-mail ou senha incorretos.";
+    if (m.includes("auth/too-many-requests")) return "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.";
+    if (m.includes("permission-denied")) return "Seu perfil não possui permissão para esta operação. Confira as regras do Firestore e o documento users do usuário.";
+    if (m.includes("failed-precondition")) return "O Firestore solicitou um índice para esta consulta. Abra o link mostrado no Console do navegador e crie o índice.";
+    if (m.includes("item_duplicado") || m.includes("already-exists") || m.includes("duplicate")) return "Este item já possui cadastro nesta filial. Use o cadastro existente para registrar a entrada.";
+    if (m.includes("item_nao_encontrado") || m.includes("não encontrado") || m.includes("nao encontrado")) return "Item não encontrado.";
+    if (m.includes("saldo insuficiente")) return message;
+    if (m.includes("possui movimentações") || m.includes("possui movimentacoes")) return "Este item já possui movimentações e não pode ser excluído. Bloqueie-o pela opção Editar.";
+    if (m.includes("network") || m.includes("failed to fetch") || m.includes("unavailable")) return "Não foi possível conectar ao Firebase. Confira sua internet e o firebase-config.js.";
     return message || "Ocorreu um erro inesperado.";
   }
 
   window.app = {
+    synchronizeFirebaseStructure: () => synchronizeFirebaseStructure(true),
     showItem,
     editItem,
     deleteItem,
