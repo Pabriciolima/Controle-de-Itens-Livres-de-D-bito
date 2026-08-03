@@ -898,3 +898,103 @@ body.keyboard-open .form-actions{position:relative;bottom:auto;margin:10px -19px
   .exit-form .form-actions{gap:8px}
   .exit-form .form-actions .btn{flex:1;min-width:0;padding-left:9px;padding-right:9px}
 }
+
+
+/* Firebase V2 — campos e teclado mobile */
+#entryCnpjInput{
+  background:#fff;
+  cursor:text;
+}
+#entryCnpjInput:focus{
+  border-color:#e31b2b;
+  box-shadow:0 0 0 4px rgba(227,27,43,.10);
+}
+.modal-card input:focus,
+.modal-card select:focus,
+.modal-card textarea:focus{
+  scroll-margin-top:120px;
+  scroll-margin-bottom:180px;
+}
+
+@media (max-width: 768px){
+  .modal-card{
+    height:min(96dvh, 920px);
+    max-height:96dvh;
+  }
+  .modal-card form{
+    padding-bottom:max(120px, env(safe-area-inset-bottom));
+  }
+  .form-actions{
+    position:sticky;
+    bottom:0;
+    z-index:8;
+    padding:12px;
+    margin-left:-12px;
+    margin-right:-12px;
+    background:rgba(255,255,255,.96);
+    backdrop-filter:blur(12px);
+    border-top:1px solid #e3e9f1;
+  }
+}
+
+
+/* Saída: campo único de requisição */
+.exit-form label.span-2 input[name="autorizado_por"]{
+  width:100%;
+}
+
+
+/* Filtro de movimentações na Central de Backups */
+.archive-actions{
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.archive-filter-label{
+  min-width:210px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin:0;
+}
+
+.archive-filter-label span{
+  color:#718096;
+  font-size:.7rem;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+
+.archive-filter-label select{
+  min-height:46px;
+  padding:0 42px 0 14px;
+  border:1px solid #dbe3ed;
+  border-radius:12px;
+  background:#fff;
+  color:#142033;
+  font:inherit;
+  font-weight:750;
+  cursor:pointer;
+  outline:none;
+}
+
+.archive-filter-label select:focus{
+  border-color:#14805b;
+  box-shadow:0 0 0 4px rgba(20,128,91,.12);
+}
+
+@media(max-width:720px){
+  .archive-actions{
+    width:100%;
+    align-items:stretch;
+  }
+
+  .archive-filter-label,
+  .archive-actions .btn{
+    width:100%;
+  }
+}

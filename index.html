@@ -185,7 +185,7 @@
           <button id="exportExitsButton" class="btn btn-secondary">Exportar CSV</button>
         </div>
         <div class="table-card"><div class="table-wrap">
-          <table class="exits-table"><thead><tr><th>Data</th><th>Item</th><th>Quantidade</th><th>OS / Chassi</th><th>Finalidade</th><th>Solicitante</th><th>Romaneio</th><th>Ações</th></tr></thead>
+          <table class="exits-table"><thead><tr><th>Data</th><th>Item</th><th>Quantidade</th><th>OS / Chassi</th><th>Finalidade</th><th>Requisitado por</th><th>Romaneio</th><th>Ações</th></tr></thead>
           <tbody id="exitsTableBody"></tbody></table>
         </div></div>
       </section>
@@ -235,7 +235,15 @@
               <p class="eyebrow">AUDITORIA</p>
               <h3>Todos os registros disponíveis</h3>
             </div>
-            <div class="audit-actions">
+            <div class="audit-actions archive-actions">
+              <label class="archive-filter-label">
+                <span>Exibir</span>
+                <select id="archiveTypeFilter" aria-label="Filtrar movimentações do arquivamento">
+                  <option value="">Tudo</option>
+                  <option value="entrada">Somente entradas</option>
+                  <option value="saida">Somente saídas</option>
+                </select>
+              </label>
               <button id="exportArchiveButton" class="btn btn-excel">Exportar Excel Premium</button>
               <button id="printAuditButton" class="btn btn-primary">Imprimir / Salvar PDF</button>
             </div>
@@ -460,8 +468,9 @@
         <label>Chassi<input name="chassi" autocapitalize="characters"></label>
         <label>Placa<input name="placa" autocapitalize="characters"></label>
         <label>Cliente<input name="cliente"></label>
-        <label>Solicitante*<input name="solicitante" required></label>
-        <label>Requisitado por<input name="autorizado_por"></label>
+        <label class="span-2">Requisitado por*
+          <input name="autorizado_por" maxlength="160" required>
+        </label>
         <label class="span-2">Observações<textarea name="observacoes" rows="3"></textarea></label>
 
         <div class="span-2 form-divider"><span>Recebimento e assinatura digital definitiva</span></div>

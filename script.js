@@ -177,6 +177,7 @@
     $("#exportHistoryButton").addEventListener("click", () => exportCSV("historico.csv", state.movements));
     $("#exportArchiveButton").addEventListener("click", exportAuditExcelPremium);
     $("#printAuditButton").addEventListener("click", printAuditReport);
+    $("#archiveTypeFilter").addEventListener("change", renderArchive);
     $("#clearSignatureButton")?.addEventListener("click", clearDigitalSignature);
     window.addEventListener("resize", () => {
       if ($("#exitModal")?.classList.contains("open")) resizeSignatureCanvas();
@@ -561,7 +562,7 @@
     $("#recentMovements").innerHTML = recent.length ? recent.map(m => `
       <div class="movement-row">
         <div class="movement-icon ${m.tipo === "entrada" ? "in" : "out"}">${m.tipo === "entrada" ? "↘" : "↗"}</div>
-        <div class="movement-info"><strong>${esc(m.itens?.codigo)} — ${esc(m.itens?.descricao)}</strong><span>${esc(m.itens?.filial)} • ${fmtDate(m.data_movimento)} • ${esc(m.responsavel || m.solicitante || "Usuário")}</span></div>
+        <div class="movement-info"><strong>${esc(m.itens?.codigo)} — ${esc(m.itens?.descricao)}</strong><span>${esc(m.itens?.filial)} • ${fmtDate(m.data_movimento)} • ${esc(m.responsavel || requisitadoPor(m) || "Usuário")}</span></div>
         <span class="movement-qty">${m.tipo === "entrada" ? "+" : "-"}${m.quantidade}</span>
       </div>`).join("") : "Nenhuma movimentação registrada.";
 
@@ -615,7 +616,7 @@
     return state.movements.filter(m => {
       const text = normalize([
         m.itens?.codigo,m.itens?.descricao,m.itens?.filial,m.numero_nota,m.numero_rem,m.numero_os,m.chassi,
-        m.responsavel,m.solicitante,m.cliente
+        m.responsavel,requisitadoPor(m),m.cliente
       ].join(" "));
       return m.tipo === type && (!q || text.includes(q)) && (!start || m.data_movimento >= start) && (!end || m.data_movimento <= end);
     });
@@ -627,6 +628,15 @@
       <tr><td>${fmtDate(m.data_movimento)}</td><td>${esc(m.numero_nota || m.numero_rem || m.protocolo || "Sem número")}<br><small>${esc(m.origem || "")}</small></td>
       <td><strong>${esc(m.itens?.codigo)}</strong><br>${esc(m.itens?.descricao)}</td><td>${esc(m.itens?.filial)}</td><td><strong>+${m.quantidade}</strong></td>
       <td>${esc(m.responsavel || "—")}</td><td>${attachmentButton(m.id)}</td></tr>`).join("") : `<tr><td colspan="7" class="empty-state">Nenhuma entrada encontrada.</td></tr>`;
+  }
+
+  function requisitadoPor(movement) {
+    return String(
+      movement?.requisitado_por
+      || movement?.autorizado_por
+      || movement?.solicitante
+      || ""
+    ).trim();
   }
 
   function renderExits() {
@@ -644,7 +654,7 @@
           <td data-label="Quantidade"><strong>-${m.quantidade}</strong></td>
           <td data-label="OS / Chassi">${esc(m.numero_os || "Sem OS")}<br><small>${esc(m.chassi || m.placa || "")}</small></td>
           <td data-label="Finalidade">${esc(m.finalidade || "—")}</td>
-          <td data-label="Solicitante">${esc(m.solicitante || "—")}</td>
+          <td data-label="Requisitado por">${esc(requisitadoPor(m) || "—")}</td>
           <td data-label="Romaneio"><div class="romaneio-status">${status}<small>${esc(romaneioNumber(m))}</small></div></td>
           <td data-label="Ações">
             <div class="table-actions romaneio-actions">
@@ -660,7 +670,7 @@
     const q = normalize($("#historySearch").value);
     const type = $("#historyTypeFilter").value;
     const rows = state.movements.filter(m => {
-      const text = normalize([m.itens?.codigo,m.itens?.descricao,m.numero_nota,m.numero_rem,m.numero_os,m.chassi,m.responsavel,m.solicitante].join(" "));
+      const text = normalize([m.itens?.codigo,m.itens?.descricao,m.numero_nota,m.numero_rem,m.numero_os,m.chassi,m.responsavel,requisitadoPor(m)].join(" "));
       return (!q || text.includes(q)) && (!type || m.tipo === type);
     });
     $("#historyTimeline").className = rows.length ? "timeline" : "timeline empty-state";
@@ -668,7 +678,7 @@
       <article class="timeline-entry">
         <span class="timeline-dot ${m.tipo}"></span>
         <div class="timeline-content"><strong>${m.tipo === "entrada" ? "Entrada" : m.tipo === "saida" ? "Saída" : "Ajuste"} de ${m.quantidade} un. — ${esc(m.itens?.codigo)} ${esc(m.itens?.descricao)}</strong>
-        <span>${esc(m.itens?.filial)} • ${esc(m.numero_nota || m.numero_rem || m.numero_os || m.finalidade || "Movimentação interna")} • ${esc(m.responsavel || m.solicitante || "")}</span></div>
+        <span>${esc(m.itens?.filial)} • ${esc(m.numero_nota || m.numero_rem || m.numero_os || m.finalidade || "Movimentação interna")} • ${esc(m.responsavel || requisitadoPor(m) || "")}</span></div>
         <div class="timeline-date">${fmtDate(m.data_movimento)}<br><small>${fmtDateTime(m.created_at)}</small></div>
       </article>`).join("") : "Nenhum histórico disponível.";
   }
@@ -691,8 +701,22 @@
       </article>`).join("") : "Nenhum documento anexado.";
   }
 
+  function filteredArchiveMovements() {
+    const type = $("#archiveTypeFilter")?.value || "";
+    return state.movements.filter(m => !type || m.tipo === type);
+  }
+
+  function archiveTypeLabel() {
+    const type = $("#archiveTypeFilter")?.value || "";
+    return type === "entrada"
+      ? "Somente entradas"
+      : type === "saida"
+        ? "Somente saídas"
+        : "Entradas e saídas";
+  }
+
   function renderArchive() {
-    const rows = [...state.movements].sort((a,b) => {
+    const rows = [...filteredArchiveMovements()].sort((a,b) => {
       const dateCompare = String(b.data_movimento || "").localeCompare(String(a.data_movimento || ""));
       return dateCompare || String(b.created_at || "").localeCompare(String(a.created_at || ""));
     });
@@ -703,6 +727,13 @@
     $("#archiveEligible").textContent = rows.length;
     $("#archiveSoon").textContent = attachmentCount;
     $("#archiveDone").textContent = olderThanTwoYears.length;
+
+    const selectedType = $("#archiveTypeFilter")?.value || "";
+    const emptyMessage = selectedType === "entrada"
+      ? "Nenhuma entrada registrada."
+      : selectedType === "saida"
+        ? "Nenhuma saída registrada."
+        : "Nenhuma movimentação registrada.";
 
     $("#archiveList").className = rows.length ? "archive-list" : "archive-list empty-state";
     $("#archiveList").innerHTML = rows.length ? rows.map(m => {
@@ -728,7 +759,7 @@
           </div>
           ${retentionBadge}
         </div>`;
-    }).join("") : "Nenhuma movimentação registrada.";
+    }).join("") : emptyMessage;
   }
 
   async function saveItem(event) {
@@ -990,7 +1021,6 @@
           chassi: String(data.get("chassi") || "").trim(),
           placa: String(data.get("placa") || "").trim(),
           cliente: String(data.get("cliente") || "").trim(),
-          solicitante: String(data.get("solicitante") || "").trim(),
           autorizado_por: String(data.get("autorizado_por") || "").trim(),
           requisitado_por: String(data.get("autorizado_por") || "").trim(),
           observacoes: String(data.get("observacoes") || "").trim(),
@@ -1162,7 +1192,7 @@
     }
 
     $("#signatureMovementId").value = movementId;
-    $("#signatureReceiverName").value = movement.solicitante || "";
+    $("#signatureReceiverName").value = "";
     $("#signatureReceiverDocument").value = "";
     $("#signatureConsent").checked = false;
     $("#signatureRomaneioSummary").innerHTML = `
@@ -1329,8 +1359,7 @@
   <text x="810" y="800" class="label">PLACA</text><text x="810" y="830" class="value">${xmlEscape(movement.placa || "—")}</text>
   <text x="102" y="885" class="label">CLIENTE</text><text x="102" y="915" class="value">${xmlEscape(movement.cliente || "—")}</text>
   <text x="600" y="885" class="label">FINALIDADE</text><text x="600" y="915" class="value">${xmlEscape(movement.finalidade || "—")}</text>
-  <text x="102" y="970" class="label">SOLICITANTE</text><text x="102" y="1000" class="value">${xmlEscape(movement.solicitante || "—")}</text>
-  <text x="600" y="970" class="label">REQUISITADO POR</text><text x="600" y="1000" class="value">${xmlEscape(movement.autorizado_por || "—")}</text>
+  <text x="102" y="970" class="label">REQUISITADO POR</text><text x="102" y="1000" class="value">${xmlEscape(requisitadoPor(movement) || "—")}</text>
   <text x="102" y="1055" class="label">OBSERVAÇÕES</text>${textLines(observationLines,102,1085)}
 
   <rect x="82" y="1185" width="1076" height="44" rx="6" fill="#12835b"/><text x="102" y="1214" class="section">RECEBIMENTO E ASSINATURA DIGITAL</text>
@@ -1467,8 +1496,7 @@
         <div class="field"><span>Placa</span><strong>${esc(movement.placa || "—")}</strong></div>
         <div class="field"><span>Chassi</span><strong>${esc(movement.chassi || "—")}</strong></div>
         <div class="field span-2"><span>Cliente</span><strong>${esc(movement.cliente || "—")}</strong></div>
-        <div class="field"><span>Solicitante</span><strong>${esc(movement.solicitante || "—")}</strong></div>
-        <div class="field span-2"><span>Requisitado por</span><strong>${esc(movement.autorizado_por || "—")}</strong></div>
+        <div class="field span-3"><span>Requisitado por</span><strong>${esc(requisitadoPor(movement) || "—")}</strong></div>
         <div class="field"><span>Responsável pela entrega</span><strong>${esc(state.profile?.nome || "—")}</strong></div>
         <div class="field span-3"><span>Observações</span><strong>${esc(movement.observacoes || "Sem observações")}</strong></div>
       </div></section>
@@ -1565,11 +1593,12 @@
   }
 
   function printAuditReport() {
-    if (!state.movements.length) {
+    const filteredRows = filteredArchiveMovements();
+    if (!filteredRows.length) {
       return toast("Não há movimentações para imprimir.", "error", "Relatório vazio");
     }
 
-    const rows = [...state.movements].sort((a,b) =>
+    const rows = [...filteredRows].sort((a,b) =>
       String(a.data_movimento || "").localeCompare(String(b.data_movimento || ""))
     );
 
@@ -1598,7 +1627,7 @@
       const tipoLabel = m.tipo === "entrada" ? "Entrada" : m.tipo === "saida" ? "Saída" : "Ajuste";
       const qtdLabel = `${m.tipo === "saida" ? "-" : "+"}${m.quantidade}`;
       const documento = m.numero_nota || m.numero_rem || m.numero_os || "—";
-      const responsavel = m.responsavel || m.solicitante || "—";
+      const responsavel = m.responsavel || requisitadoPor(m) || "—";
 
       return `
         <tr>
@@ -1689,7 +1718,7 @@
         <div class="logo">LD</div>
         <div>
           <h1>Relatório de Auditoria — Estoque Auxiliar</h1>
-          <div class="subtitle">Controle de itens livres de débito • REM / Garantia S/R</div>
+          <div class="subtitle">Controle de itens livres de débito • ${esc(archiveTypeLabel())} • REM / Garantia S/R</div>
         </div>
       </div>
       <div class="report-meta">
@@ -1775,8 +1804,11 @@
   }
 
   async function exportAuditExcelPremium() {
-    if (!state.movements.length) {
-      return toast("Não há movimentações para exportar.", "error", "Relatório vazio");
+    const filteredRows = filteredArchiveMovements();
+    if (!filteredRows.length) {
+      const selectedType = $("#archiveTypeFilter")?.value || "";
+      const label = selectedType === "entrada" ? "entradas" : selectedType === "saida" ? "saídas" : "movimentações";
+      return toast(`Não há ${label} para exportar.`, "error", "Relatório vazio");
     }
 
     if (!window.ExcelJS) {
@@ -1791,7 +1823,7 @@
     setLoading(button, true, "Gerando Excel...");
 
     try {
-      const rows = [...state.movements].sort((a,b) => {
+      const rows = [...filteredArchiveMovements()].sort((a,b) => {
         const dateCompare = String(a.data_movimento || "").localeCompare(String(b.data_movimento || ""));
         return dateCompare || String(a.created_at || "").localeCompare(String(b.created_at || ""));
       });
@@ -2023,7 +2055,7 @@
           chassi: String(m.chassi || ""),
           placa: m.placa || "",
           cliente: m.cliente || "",
-          responsavel: m.responsavel || m.solicitante || "",
+          responsavel: m.responsavel || requisitadoPor(m) || "",
           autorizado: m.autorizado_por || "",
           observacoes: m.observacoes || "",
           anexos: attachments.length,
@@ -2158,7 +2190,7 @@
         cliente: m.cliente || "",
         finalidade: m.finalidade || "",
         responsavel: m.responsavel || "",
-        solicitante: m.solicitante || "",
+        requisitado_por: requisitadoPor(m),
         autorizado_por: m.autorizado_por || "",
         observacoes: m.observacoes || "",
         quantidade_anexos: itemAttachments.length,
