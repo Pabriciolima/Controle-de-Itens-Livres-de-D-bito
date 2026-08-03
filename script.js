@@ -791,9 +791,6 @@
     event.preventDefault();
     const button = event.submitter;
     const data = new FormData(event.target);
-    const files = [...($("#entryFiles")?.files || [])];
-    if (!validateFiles(files)) return;
-
     const isNew = data.get("item_mode") === "novo";
     const cnpjEmitente = String(data.get("cnpj_emitente") || "").replace(/\D/g, "");
     if (!validarCnpjBasico(cnpjEmitente)) return toast("Informe um CNPJ do emitente com 14 números.", "error", "CNPJ inválido");
@@ -911,8 +908,6 @@
           createdAt: firestoreNow(), created_at: firestoreNow()
         });
       });
-
-      if (files.length) await uploadFiles(files, movementId, "entrada");
 
       event.target.reset();
       event.target.item_mode.value = "novo";
@@ -1040,50 +1035,6 @@
     context.drawImage(source, 0, 0, target.width, target.height);
     const webp = target.toDataURL("image/webp", 0.72);
     return webp.startsWith("data:image/webp") ? webp : target.toDataURL("image/jpeg", 0.72);
-  }
-
-  async function uploadFiles(files, movementId, type) {
-    let movement = state.movements.find(m => m.id === movementId);
-    if (!movement) {
-      const movementDoc = await db.collection("movements").doc(movementId).get();
-      if (movementDoc.exists) movement = { id: movementDoc.id, ...movementDoc.data() };
-    }
-    const branchCode = movement?.filial_codigo || movement?.branchCode || state.profile?.branchCode || "";
-
-    for (const file of files) {
-      const dataUrl = await fileToDataUrl(file);
-      if (dataUrlSize(dataUrl) > 650 * 1024) {
-        throw new Error(`O arquivo ${file.name} ultrapassa o limite seguro de 650 KB do Firestore.`);
-      }
-      await db.collection("attachments").add({
-        movimentacao_id: movementId,
-        movementId,
-        tipo_movimento: type,
-        movementType: type,
-        nome_arquivo: file.name,
-        fileName: file.name,
-        mime_type: file.type || "application/octet-stream",
-        mimeType: file.type || "application/octet-stream",
-        tamanho_bytes: file.size,
-        sizeBytes: file.size,
-        data_url: dataUrl,
-        dataUrl,
-        branchCode,
-        criado_por: state.session.user.uid,
-        createdBy: state.session.user.uid,
-        createdAt: firestoreNow(), created_at: firestoreNow()
-      });
-    }
-  }
-
-  function validateFiles(files) {
-    const max = 650 * 1024;
-    const oversized = files.find(f => f.size > max);
-    if (oversized) {
-      toast(`O arquivo "${oversized.name}" ultrapassa 650 KB, limite seguro para salvar sem Firebase Storage.`,"error","Arquivo muito grande");
-      return false;
-    }
-    return true;
   }
 
   async function openDocument(id) {
