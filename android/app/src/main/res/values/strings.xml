@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Controle Itens Livres de Débito</string>
+    <string name="title_activity_main">Controle Itens Livres de Débito</string>
+    <string name="package_name">com.grupomonaco.itenslivres</string>
+    <string name="custom_url_scheme">com.grupomonaco.itenslivres</string>
+</resources>
