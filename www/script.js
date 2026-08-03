@@ -143,6 +143,9 @@
   }
 
   function bindUI() {
+    const copyrightYear = $("#copyrightYear");
+    if (copyrightYear) copyrightYear.textContent = String(new Date().getFullYear());
+
     $("#loginForm").addEventListener("submit", login);
     $("#logoutButton").addEventListener("click", () => auth?.signOut());
     $("#menuButton").addEventListener("click", () => $("#sidebar").classList.toggle("open"));
